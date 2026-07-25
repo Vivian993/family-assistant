@@ -82,6 +82,7 @@ const navItems=[
   {id:'home',lbl:'待辦事項',color:'var(--cream)'},
   {id:'calc',lbl:'計算機',color:'var(--pink)'},
   {id:'fest',lbl:'重要節日',color:'var(--purple)'},
+  {id:'fortune',lbl:'求籤',color:'var(--ruby)'},
   {id:'weather',lbl:'天氣',color:'var(--blue)'},
   {id:'map',lbl:'地圖',color:'var(--peach)'},
   {id:'news',lbl:'新聞',color:'var(--milktea)'},
@@ -101,6 +102,7 @@ function renderMain(){
   if(currentView==='home')m.innerHTML=homeHTML();
   else if(currentView==='calc')m.innerHTML=calcHTML();
   else if(currentView==='fest')m.innerHTML=festHTML();
+  else if(currentView==='fortune')m.innerHTML=fortuneHTML();
   else if(currentView==='weather')m.innerHTML=weatherHTML();
   else if(currentView==='map')m.innerHTML=mapHTML();
   else if(currentView==='news')m.innerHTML=newsHTML();
@@ -434,6 +436,215 @@ function addFestItem(id,section){
 }
 
 /* ============ WEATHER (illustrative / mock) ============ */
+/* ============ 六十甲子籤 (求籤) — for-fun, entertainment only ============ */
+const QIAN_DATA=[
+{n:1,gz:"甲子",wx:"屬金利秋　宜其西方",verse:["日出便見風雲散","光明清淨照世間","一向前途通大道","萬事清吉保平安"],level:"上上",summary:"雲散日出，光明在前，是六十籤中少見的極吉之籤。",advice:"此時放手去做，事業感情皆宜正面推進，不必疑慮。"},
+{n:2,gz:"甲寅",wx:"屬水利冬　宜其北方",verse:["於今此景正當時","看看欲吐百花魁","若能遇得春色到","一洒清吉脫塵埃"],level:"中上",summary:"花將盛未盛，時機正在醞釀，只差臨門一腳。",advice:"耐心等候關鍵時刻到來，別急著在半途收手。"},
+{n:3,gz:"甲辰",wx:"屬火利夏　宜其南方",verse:["勸君把定心莫虛","天註衣祿自有餘","和合重重常吉慶","時來終遇得明珠"],level:"上上",summary:"衣食自有安排，人和事順，終能得到珍貴的成果。",advice:"守住信心、不要自亂陣腳，好事會如期而至。"},
+{n:4,gz:"甲午",wx:"屬金利秋　宜其西方",verse:["風恬浪靜可行舟","恰是中秋月一輪","凡事不須多憂慮","福祿自有慶家門"],level:"上上",summary:"風平浪靜，正是啟航的好時機，家運亨通。",advice:"可以安心推進計畫，不必為小事過度煩惱。"},
+{n:5,gz:"甲申",wx:"屬水利冬　宜其北方",verse:["只恐前途命有變","勸君作急可宜先","且守長江無大事","命逢太白守身邊"],level:"中",summary:"前路可能有變數，宜提早準備、不宜拖延。",advice:"該辦的事盡早處理，靜守本分可避開風險。"},
+{n:6,gz:"甲戌",wx:"屬火利夏　宜其南方",verse:["風雲致雨落洋洋","天災時氣必有傷","命內此事難和合","更逢一足出外鄉"],level:"中下",summary:"風雨將至，事情難以順利和合，恐有波折。",advice:"近期宜低調保守，避免與人硬碰硬起衝突。"},
+{n:7,gz:"乙丑",wx:"屬金利秋　宜其西方",verse:["雲開月出正分明","不須進退問前程","婚姻皆由天註定","和合清吉萬事成"],level:"中上",summary:"雲開月出，情勢漸漸明朗，姻緣及合作皆有好結果。",advice:"順其自然發展即可，不必反覆猶豫進退。"},
+{n:8,gz:"乙卯",wx:"屬水利冬　宜其北方",verse:["禾稻看看結成完","此事必定兩相全","回到家中寬心坐","妻兒鼓舞樂團圓"],level:"上",summary:"禾稻結實，象徵努力終於開花結果，家庭圓滿。",advice:"是收成的時刻，好好享受成果、與家人分享喜悅。"},
+{n:9,gz:"乙巳",wx:"屬火利夏　宜其南方",verse:["龍虎相隨在深山","君爾何須背後看","不知此去相愛愉","他日與我卻無干"],level:"中下",summary:"表面同行，實則各懷心思，需留意人際間的猜忌。",advice:"與人合作時把話說清楚，避免日後生出誤會。"},
+{n:10,gz:"乙未",wx:"屬金利秋　宜其西方",verse:["花開結子一半枯","可惜今年汝虛度","漸漸日落西山去","勸君不用向前途"],level:"中下",summary:"花開了一半就凋零，事情容易做到一半就中斷。",advice:"此籤提醒別勉強硬推，不如先蓄力、等下一個時機。"},
+{n:11,gz:"乙酉",wx:"屬水利冬　宜其北方",verse:["靈雞漸漸見分明","凡事且看子丑寅","雲開月出照天下","郎君即便見太平"],level:"中上",summary:"事情正逐漸明朗，只要再等一段時間，答案自現。",advice:"按部就班觀察局勢發展，太平自然可期。"},
+{n:12,gz:"乙亥",wx:"屬火利夏　宜其南方",verse:["長江風浪漸漸靜","于今得進可安寧","必有貴人相扶助","凶事脫出見太平"],level:"中上",summary:"風浪漸平，局勢轉安，且有貴人相助脫離困境。",advice:"多與能幫助你的人保持聯繫，危機正在過去。"},
+{n:13,gz:"丙子",wx:"屬水利冬　宜其北方",verse:["命中正逢羅孛關","用盡心機總未休","作福問神難得過","恰是行舟上高灘"],level:"中下",summary:"正逢阻滯難關，即便費盡心思也難順利推進。",advice:"此時宜緩不宜進，硬闖恐如船擱淺，先蓄力待轉機。"},
+{n:14,gz:"丙寅",wx:"屬火利夏　宜其南方",verse:["財中漸漸見分明","花開花謝結子成","寬心且看月中桂","郎君即便見太平"],level:"中上",summary:"財運與成果正逐漸清晰浮現，寬心等待即可。",advice:"不必急躁，放寬心讓事情自然開花結果。"},
+{n:15,gz:"丙辰",wx:"屬土利年　四方皆宜",verse:["八十原來是太公","看看晚景遇文王","目下緊事休相問","勸君且守待運通"],level:"中",summary:"如姜太公八十歲方遇文王，屬大器晚成之象。",advice:"眼前若有急事，不妨先放一放，時候到了自然通達。"},
+{n:16,gz:"丙午",wx:"屬水利冬　宜其北方",verse:["不須作福不須求","用盡心機總未休","陽世不知陰世事","官法如爐不自由"],level:"下",summary:"此籤偏凶，提醒事情有其定數，強求也未必如願。",advice:"凡事依循正道而行，切莫投機取巧或以身試法。"},
+{n:17,gz:"丙申",wx:"屬火利夏　宜其南方",verse:["舊恨重重未改為","家中禍患不臨身","須當謹防宜作福","龍蛇交會得和合"],level:"中",summary:"舊有的心結尚未化解，宜多加防範、廣結善緣。",advice:"主動修補關係、多做善事，能讓紛爭化為和合。"},
+{n:18,gz:"丙戌",wx:"屬土利年　四方皆宜",verse:["君問中間此言因","看看祿馬拱前程","若得貴人多得利","和合自有兩分明"],level:"中上",summary:"前程漸有貴人拱照，只要有人扶持便能得利。",advice:"主動尋求或珍惜貴人的協助，事情會更順利。"},
+{n:19,gz:"丁丑",wx:"屬水利冬　宜其北方",verse:["富貴由命天註定","心高必然誤君期","不然且回依舊路","雲開月出自分明"],level:"中",summary:"富貴自有定數，太過心高氣傲反而容易誤事。",advice:"腳踏實地走原本熟悉的路，答案終會清楚浮現。"},
+{n:20,gz:"丁卯",wx:"屬火利夏　宜其南方",verse:["前途功名未得意","只恐命內有交加","兩家必定防損失","勸君且退莫咨嗟"],level:"中下",summary:"功名之事尚未如意，且雙方都需提防損失。",advice:"此時宜先退一步觀望，不必為眼前不順而嘆息。"},
+{n:21,gz:"丁巳",wx:"屬土利年　四方皆宜",verse:["十方佛法有靈通","大難禍患不相同","紅日當空常照耀","還有貴人到家堂"],level:"上",summary:"如紅日當空，禍患遠離，並有貴人主動上門相助。",advice:"心懷善念、坦然面對，貴人與好運自會降臨。"},
+{n:22,gz:"丁未",wx:"屬水利冬　宜其北方",verse:["太公家業八十成","月出光輝四海明","命內自然逢大吉","茅屋中間百事亨"],level:"上上",summary:"厚積薄發、大器晚成，如月出照亮四方，百事亨通。",advice:"過去的累積正要開花結果，可安心迎接豐收。"},
+{n:23,gz:"丁酉",wx:"屬火利夏　宜其南方",verse:["欲去長江水闊茫","前途未遂運未通","如今絲綸常在手","只恐魚水不相逢"],level:"中下",summary:"目標尚遠、時運未到，即使準備齊全也難巧遇良機。",advice:"持續準備、耐心守候，時機未到不必勉強出擊。"},
+{n:24,gz:"丁亥",wx:"屬土利年　四方皆宜",verse:["月出光輝四海明","前途祿位見太平","浮雲掃退終無事","可保禍患不臨身"],level:"上",summary:"烏雲終將散去，前途祿位安穩，可保平安無事。",advice:"眼前的陰霾只是暫時，撐過去便是坦途。"},
+{n:25,gz:"戊子",wx:"屬火利夏　宜其南方",verse:["總是前途莫心勞","求神問聖枉是多","但看雞犬日過後","不須作福事如何"],level:"中",summary:"與其反覆求問焦慮，不如放寬心讓時間給出答案。",advice:"減少不必要的煩憂與奔波，順其自然就好。"},
+{n:26,gz:"戊寅",wx:"屬土利年　四方皆宜",verse:["選出牡丹第一枝","勸君折取莫遲疑","世間若問相知處","萬事逢春正及時"],level:"上",summary:"如選中最好的一枝牡丹，機會就在眼前，正是良機。",advice:"看準的事就果斷把握，此時猶豫恐失良機。"},
+{n:27,gz:"戊辰",wx:"屬木利春　宜其東方",verse:["君爾寬心且自由","門庭清吉家無憂","財寶自然終吉利","凡事無傷不用求"],level:"上",summary:"家門清吉平安，財運自然到來，無需刻意強求。",advice:"放寬心過生活，好運自會隨順而至。"},
+{n:28,gz:"戊午",wx:"屬火利夏　宜其南方",verse:["於今莫作此當時","虎落平陽被犬欺","世間凡事何難定","千山萬水也遲疑"],level:"中下",summary:"如猛虎暫時受制於平地，處境較為被動受限。",advice:"此時宜韜光養晦、忍耐蓄力，不宜與人正面衝突。"},
+{n:29,gz:"戊申",wx:"屬土利年　四方皆宜",verse:["枯木可惜未逢春","如今反在暗中藏","寬心且守風霜退","還君依舊作乾坤"],level:"中",summary:"如枯木尚未逢春，暫時韜光養晦、蟄伏待機。",advice:"耐心撐過寒冬，風霜退去後仍能東山再起。"},
+{n:30,gz:"戊戌",wx:"屬木利春　宜其東方",verse:["漸漸看此月中和","過後須防未得高","改變顏色前途去","凡事必定見重勞"],level:"中下",summary:"眼前尚屬平和，但盛極之後須提防走下坡。",advice:"順境中仍要居安思危，避免因鬆懈而多費周折。"},
+{n:31,gz:"己丑",wx:"屬火利夏　宜其南方",verse:["綠柳蒼蒼正當時","任君此去作乾坤","花果結實無殘謝","福祿自有慶家門"],level:"上",summary:"正逢生機蓬勃之時，可放手一搏、大展身手。",advice:"時機正好，勇敢去做自己想做的規劃與嘗試。"},
+{n:32,gz:"己卯",wx:"屬土利年　四方皆宜",verse:["龍虎相交在門前","此事必定兩相連","黃金忽然變成鐵","何用作福問神仙"],level:"中下",summary:"局勢牽連複雜，原本看好的事可能生變質。",advice:"重要決定前多留一手，別把雞蛋放在同一個籃子。"},
+{n:33,gz:"己巳",wx:"屬木利春　宜其東方",verse:["欲去長江水闊茫","行舟把定未遭風","戶內用心再作福","看看魚水得相逢"],level:"中上",summary:"江水雖闊，但只要把穩方向就不致遭遇風浪。",advice:"在家中多用心經營、多積福德，機緣自會到來。"},
+{n:34,gz:"己未",wx:"屬火利夏　宜其南方",verse:["危險高山行過盡","莫嫌此路有重重","若見蘭桂漸漸發","長蛇反轉變成龍"],level:"中",summary:"艱難險阻已走過大半，苦盡甘來、蛻變在即。",advice:"再撐一段路，眼前的重重考驗會是蛻變的契機。"},
+{n:35,gz:"己酉",wx:"屬土利年　四方皆宜",verse:["此事何須用心機","前途變怪自然知","看看此去得和合","漸漸脫出見太平"],level:"中上",summary:"不必費心算計，順其自然事情反而會逐漸和合。",advice:"少一點算計、多一點順勢而為，結果會更平順。"},
+{n:36,gz:"己亥",wx:"屬木利春　宜其東方",verse:["福如東海壽如山","君爾何須嘆苦難","命內自然逢大吉","祈保分明自平安"],level:"上上",summary:"福壽雙全之象，眼前的苦難終將過去，迎來大吉。",advice:"不必為一時困難唉聲嘆氣，福報正在路上。"},
+{n:37,gz:"庚子",wx:"屬土利年　四方皆宜",verse:["運逢得意身顯變","君爾身中皆有益","一向前途無難事","決意之中保清吉"],level:"上",summary:"時運正旺，身分處境明顯轉好，前途沒有難事。",advice:"下定決心去做，這段時間做的決定多半對你有利。"},
+{n:38,gz:"庚寅",wx:"屬木利春　宜其東方",verse:["名顯有意在中央","不須祈禱心自安","看看早晚日過後","即時得意在其間"],level:"中上",summary:"名聲與心意正在被看見，不必刻意求神安心。",advice:"只要持續累積表現，得意的一天不會太遠。"},
+{n:39,gz:"庚辰",wx:"屬金利秋　宜其西方",verse:["意中若問神仙路","勸爾且退望高樓","寬心且守寬心坐","必然遇得貴人扶"],level:"中",summary:"若追求的目標過於遙遠，不妨先退一步靜觀。",advice:"暫緩躁進的腳步，耐心等候會有貴人扶持。"},
+{n:40,gz:"庚午",wx:"屬土利年　四方皆宜",verse:["平生富貴成祿位","君家門戶定光輝","此中必定無損失","夫妻百歲喜相隨"],level:"上上",summary:"富貴祿位穩固，家門光輝，感情關係也長久美滿。",advice:"目前的努力方向正確，可以放心長期投入經營。"},
+{n:41,gz:"庚申",wx:"屬木利春　宜其東方",verse:["今行到此實難推","歌歌暢飲自徘徊","雞犬相聞消息近","婚姻夙世結成雙"],level:"中上",summary:"事情走到這一步已難回頭，感情、姻緣的消息正在靠近。",advice:"放輕鬆看待眼前局勢，好消息其實已經不遠。"},
+{n:42,gz:"庚戌",wx:"屬金利秋　宜其西方",verse:["一重江水一重山","誰知此去路又難","任他改求終不過","是非終久未得安"],level:"中下",summary:"前路重重阻礙，即便另尋他法也難以真正突破。",advice:"是非糾纏一時難平，宜暫時退讓、避免正面硬拚。"},
+{n:43,gz:"辛丑",wx:"屬土利年　四方皆宜",verse:["一年作事急如飛","君爾寬心莫遲疑","貴人還在千里外","音信月中漸漸知"],level:"中",summary:"事情進展飛快，貴人雖在遠方，但消息會逐漸傳來。",advice:"別因等待而焦躁，保持行動、消息自會漸漸明朗。"},
+{n:44,gz:"辛卯",wx:"屬木利春　宜其東方",verse:["客到前途多得利","君爾何故兩相疑","雖是中間逢進退","月出光輝得運時"],level:"中上",summary:"貴客將至、利多將到，過程雖有進退反覆但終將得運。",advice:"不必對眼前的猶豫不決過度懷疑，堅持下去會見光明。"},
+{n:45,gz:"辛巳",wx:"屬金利秋　宜其西方",verse:["花開今已結成果","富貴榮華終到老","君子小人相會合","萬事清吉莫煩惱"],level:"上上",summary:"花已結果，富貴榮華可維持長久，萬事皆能清吉。",advice:"這是收穫的階段，安心享受成果，不必多慮。"},
+{n:46,gz:"辛未",wx:"屬土利年　四方皆宜",verse:["功名得意與君顯","前途富貴喜安然","若遇一輪明月照","十五團圓光滿天"],level:"上",summary:"功名得意、家庭富貴，如十五明月一般團圓美滿。",advice:"是分享喜悅、與家人團聚的好時機。"},
+{n:47,gz:"辛酉",wx:"屬木利春　宜其東方",verse:["君爾何須問聖跡","自己心中皆有益","於今且看月中旬","凶事脫出化成吉"],level:"中上",summary:"答案其實在自己心中，原本的凶事會逐漸轉化為吉。",advice:"相信自己的判斷，月中之後情況會明顯好轉。"},
+{n:48,gz:"辛亥",wx:"屬金利秋　宜其西方",verse:["陽世作事未和同","雲遮月色正朦朧","心中意欲前途去","只恐命內運未通"],level:"中下",summary:"人事尚未和合，局勢如雲遮月般朦朧不明。",advice:"心裡雖想往前衝，但時運未通，宜再耐心等待。"},
+{n:49,gz:"壬子",wx:"屬木利春　宜其東方",verse:["言語雖多不可從","風雲靜處未行龍","暗中終得明消息","君爾何須問重重"],level:"中",summary:"眾說紛紜不必盡信，看似平靜其實暗中正在醞釀轉機。",advice:"別被雜訊干擾，安靜等待，消息終會明朗。"},
+{n:50,gz:"壬寅",wx:"屬金利秋　宜其西方",verse:["佛前發誓無異心","且看前途得好音","此物原來本是鐵","也能變化得成金"],level:"上",summary:"只要一心誠懇、始終如一，鐵也能煉成金，終有好消息。",advice:"保持初心與誠意去堅持，會有意想不到的轉化。"},
+{n:51,gz:"壬辰",wx:"屬水利冬　宜其北方",verse:["東西南北不堪行","前途此事正可當","勸君把定莫煩惱","家門自有保安康"],level:"中",summary:"四處奔走皆不順，但只要守住本分，家中仍能平安。",advice:"與其到處奔波求解，不如先安頓好自己與家人。"},
+{n:52,gz:"壬午",wx:"屬木利春　宜其東方",verse:["功名事業本由天","不須掛念意懸懸","若問中間遲與速","風雲際會在眼前"],level:"中上",summary:"功名事業自有天時，時機成熟的際會已經在眼前。",advice:"不必為進度快慢懸心，該來的機會很快就會出現。"},
+{n:53,gz:"壬申",wx:"屬金利秋　宜其西方",verse:["看君來問心中事","積善之家慶有餘","運亨財子雙雙至","指日喜氣溢門閭"],level:"上",summary:"平日積善之人，福澤有餘，財運與喜事將接連而來。",advice:"持續行善、待人以誠，喜氣很快就會降臨家門。"},
+{n:54,gz:"壬戌",wx:"屬土利年　四方皆宜",verse:["孤燈寂寂夜沉沉","萬事清吉萬事成","若逢陰中有善果","燒得好香達神明"],level:"中上",summary:"雖處於安靜低調的階段，但只要心存善念，終能清吉有成。",advice:"低潮期不妨多做善事、沉澱自己，會為將來鋪路。"},
+{n:55,gz:"癸丑",wx:"屬木利春　宜其東方",verse:["須知進退總言虛","看看發暗未必全","珠玉深藏還未變","心中但得枉徒然"],level:"中下",summary:"進退的說法都還不確定，好比珠玉尚深藏未現。",advice:"此時強求答案徒勞無益，不如靜待時機成熟。"},
+{n:56,gz:"癸卯",wx:"屬金利秋　宜其西方",verse:["病中若得苦心勞","到底完全總未遭","去後不須回頭問","心中事務盡消磨"],level:"中下",summary:"歷經一番辛苦煎熬，但終究能撐過難關。",advice:"放下過去反覆糾結的事，讓時間慢慢把心結消磨掉。"},
+{n:57,gz:"癸巳",wx:"屬水利冬　宜其北方",verse:["勸君把定心莫虛","前途清吉得運時","到底中間無大事","又遇神仙守安居"],level:"上",summary:"守住信心，前途清吉，過程中也沒有太大波折。",advice:"安心依照計畫前進，冥冥中自有貴人守護。"},
+{n:58,gz:"癸未",wx:"屬木利春　宜其東方",verse:["蛇身意欲變成龍","只恐命內運未通","久病且作寬心坐","言語雖多不可從"],level:"中",summary:"有蛻變成長的心志，但時運尚未完全成熟，需再等等。",advice:"耐心調養、不必被眾說紛紜的意見左右方向。"},
+{n:59,gz:"癸酉",wx:"屬金利秋　宜其西方",verse:["有心作福莫遲疑","求名清吉正當時","此事必能成會合","財寶自然喜相隨"],level:"上",summary:"有心行善、追求正道正是好時機，事情能圓滿成就。",advice:"想做的好事、正當的計畫，此時可以放心去做。"},
+{n:60,gz:"癸亥",wx:"屬水利冬　宜其北方",verse:["月出光輝本清吉","浮雲總是蔽陰色","戶內用心再作福","當官分理便有益"],level:"中上",summary:"本質清吉光明，只是偶有浮雲遮蔽，需多加用心。",advice:"多在自己能掌握的事上用心努力，會比一味外求更有益。"}
+];
+let lastFortune=store.get('lastFortune',null);
+function fortuneHTML(){
+  const has=!!lastFortune;
+  return `<div class="hint-banner"><span class="ic">💡</span><span>小提示：點一下籤筒就能求一支籤，看看今天的運勢。抽過的結果會留在這裡，家人想玩可以隨時進來再抽一次。內容僅供參考娛樂，別太當真喔！</span></div>
+  <div class="card fortune-card">
+    <div class="fortune-stage">
+      <div class="f-eyebrow">誠　心　則　靈</div>
+      <div class="f-title">六十甲子籤</div>
+      <div class="f-subtitle">默念心中所問之事，再行抽籤</div>
+      <div class="f-smokewrap" aria-hidden="true"><div class="f-smoke"></div><div class="f-smoke"></div><div class="f-smoke"></div></div>
+
+      <div class="f-qiantong-wrap ${has?'hidden':''}" id="qiantongWrap">
+        <div class="f-qiantong" id="qiantong">
+          <div class="f-sticks" id="sticksLayer"></div>
+          <div class="f-tuberim"></div>
+          <div class="f-tubebody"></div>
+        </div>
+        <div class="f-hint">點擊籤筒，搖出一支籤</div>
+        <button class="f-drawbtn" id="drawBtn">🙏　誠　心　抽　籤</button>
+      </div>
+
+      <div class="f-flyingstick" id="flyingStick"></div>
+
+      <div class="f-resultcard ${has?'':'hidden'}" id="resultCard">
+        <div class="f-cardinner" id="cardInner">
+          <div class="f-cardseal">籤</div>
+          <div class="f-cardnum">第 <span id="rNum">${has?lastFortune.n:''}</span> 籤</div>
+          <div class="f-cardgz" id="rGz">${has?lastFortune.gz:''}</div>
+          <div class="f-cardlevel" id="rLevel">${has?lastFortune.level+'籤':''}</div>
+          <div class="f-cardverse" id="rVerse">${has?lastFortune.verse.join('　<br>'):''}</div>
+          <div class="f-cardwx" id="rWx">${has?lastFortune.wx:''}</div>
+          <div class="f-cardsummary" id="rSummaryWrap"><b>籤意　</b><span id="rSummary">${has?lastFortune.summary:''}</span></div>
+          <div class="f-cardadvice" id="rAdvice">${has?'建議　'+lastFortune.advice:''}</div>
+        </div>
+        <button class="f-againbtn" id="againBtn">再　求　一　籤</button>
+      </div>
+
+      <div class="f-footer">籤詩原文為民間流傳之六十甲子籤傳統版本；吉凶評註僅供參考娛樂，<br>人生方向仍須靠自己的判斷與努力，如遇重大抉擇建議諮詢專業人士。</div>
+    </div>
+  </div>`;
+}
+function bindFortuneView(){
+  const qiantongWrap=document.getElementById('qiantongWrap');
+  const qiantong=document.getElementById('qiantong');
+  const drawBtn=document.getElementById('drawBtn');
+  const sticksLayer=document.getElementById('sticksLayer');
+  const flyingStick=document.getElementById('flyingStick');
+  const resultCard=document.getElementById('resultCard');
+  const cardInner=document.getElementById('cardInner');
+  const againBtn=document.getElementById('againBtn');
+  if(!qiantong)return;
+
+  const STICK_COUNT=12;
+  sticksLayer.innerHTML='';
+  for(let i=0;i<STICK_COUNT;i++){
+    const s=document.createElement('div');
+    s.className='f-stick';
+    const angle=(Math.random()*26-13).toFixed(1);
+    const leftOffset=(Math.random()*60-30).toFixed(1);
+    s.style.left=`calc(50% + ${leftOffset}px)`;
+    s.style.transform=`rotate(${angle}deg)`;
+    const tip=document.createElement('div');
+    tip.className='f-tip';
+    s.appendChild(tip);
+    sticksLayer.appendChild(s);
+  }
+
+  let drawing=false;
+  function drawQian(){
+    if(drawing)return;
+    drawing=true;
+    if(drawBtn)drawBtn.disabled=true;
+    qiantong.classList.add('shaking');
+    playShakeNoise();
+
+    setTimeout(()=>{
+      qiantong.classList.remove('shaking');
+      const item=QIAN_DATA[Math.floor(Math.random()*QIAN_DATA.length)];
+
+      flyingStick.classList.remove('fly');
+      void flyingStick.offsetWidth;
+      flyingStick.classList.add('fly');
+
+      setTimeout(()=>{
+        qiantongWrap.classList.add('hidden');
+        renderFortuneResult(item);
+        lastFortune=item;
+        store.set('lastFortune',lastFortune);
+        resultCard.classList.remove('hidden');
+        cardInner.style.animation='none';
+        void cardInner.offsetWidth;
+        cardInner.style.animation='';
+        playGong();
+        drawing=false;
+        if(drawBtn)drawBtn.disabled=false;
+      },950);
+    },900);
+  }
+  function renderFortuneResult(item){
+    document.getElementById('rNum').textContent=item.n;
+    document.getElementById('rGz').textContent=item.gz;
+    document.getElementById('rLevel').textContent=item.level+'籤';
+    document.getElementById('rVerse').innerHTML=item.verse.join('　<br>');
+    document.getElementById('rWx').textContent=item.wx;
+    document.getElementById('rSummary').textContent=item.summary;
+    document.getElementById('rAdvice').textContent='建議　'+item.advice;
+  }
+  drawBtn.addEventListener('click',drawQian);
+  qiantong.addEventListener('click',drawQian);
+  againBtn.addEventListener('click',()=>{
+    resultCard.classList.add('hidden');
+    qiantongWrap.classList.remove('hidden');
+  });
+}
+function playShakeNoise(){
+  if(settings.buttonSound===false)return;
+  const ctx=ensureAudioCtx();if(!ctx)return;if(ctx.state==='suspended')ctx.resume();
+  const dur=0.85;
+  const bufferSize=Math.floor(ctx.sampleRate*dur);
+  const buffer=ctx.createBuffer(1,bufferSize,ctx.sampleRate);
+  const data=buffer.getChannelData(0);
+  for(let i=0;i<bufferSize;i++){
+    const env=(Math.sin(i/ctx.sampleRate*38)+1)/2;
+    data[i]=(Math.random()*2-1)*0.3*env;
+  }
+  const src=ctx.createBufferSource();
+  src.buffer=buffer;
+  const gain=ctx.createGain();gain.gain.value=0.5;
+  src.connect(gain);gain.connect(ctx.destination);
+  src.start();
+}
+function playGong(){
+  if(settings.buttonSound===false)return;
+  const ctx=ensureAudioCtx();if(!ctx)return;if(ctx.state==='suspended')ctx.resume();
+  const t=ctx.currentTime;
+  const osc=ctx.createOscillator(),osc2=ctx.createOscillator();
+  const gain=ctx.createGain();
+  osc.type='sine';osc.frequency.setValueAtTime(110,t);
+  osc2.type='sine';osc2.frequency.setValueAtTime(164,t);
+  gain.gain.setValueAtTime(0.0001,t);
+  gain.gain.exponentialRampToValueAtTime(0.32,t+0.05);
+  gain.gain.exponentialRampToValueAtTime(0.0001,t+1.7);
+  osc.connect(gain);osc2.connect(gain);gain.connect(ctx.destination);
+  osc.start(t);osc2.start(t);osc.stop(t+1.8);osc2.stop(t+1.8);
+}
+
 /* ============ WEATHER (real data via Open-Meteo, no API key needed) ============ */
 function wmoInfo(code){
   const map={
@@ -1044,6 +1255,8 @@ function openHelp(){
       <p>跟一般計算機一樣，按數字和加減乘除，按「＝」得到結果。可以切換粉紅／粉藍配色。右邊「本次購物小計」可以把任一筆計算結果加進去累計總金額。紀錄旁的🗑可以刪掉單一筆紀錄，「清除全部紀錄」可以一次清空。</p>
       <h4>🙏 重要節日</h4>
       <p>顯示除夕、元宵、端午、中元、中秋、重陽、冬至要拜拜準備的東西，藍色底是「觀世音菩薩」、黃色底是「祖先」。點供品文字可以直接修改，點「✕」刪除，點「＋新增」可以加入新的項目，內容都會自動存起來。</p>
+      <h4>🎋 求籤</h4>
+      <p>點一下籤筒或按鈕就能求一支六十甲子籤，看看今天的運勢，會有搖籤和開籤的音效。抽過的結果會留著，家人想玩可以隨時進來按「再求一籤」。內容純屬民俗趣味，僅供參考。</p>
       <h4>☁️ 天氣</h4>
       <p>會自動抓取你目前所在位置的即時天氣（需要允許瀏覽器定位、並連上網路），顯示溫度、紫外線、風力、濕度、穿衣建議和一週預報。如果沒有網路或不給定位，會改顯示示意資料並註明。</p>
       <h4>🗺 地圖</h4>
@@ -1077,6 +1290,7 @@ function afterRender(){
   if(currentView==='weather')loadWeather();
   if(currentView==='news'){loadNews();bindShortcutGrid('linkGrid',quickLinks,'quickLinks',renderMain);}
   if(currentView==='map')bindMapView();
+  if(currentView==='fortune')bindFortuneView();
 }
 
 /* ============ INIT ============ */
