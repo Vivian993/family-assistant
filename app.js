@@ -81,12 +81,12 @@ let festivals=store.get('festivals',defaultFestivals);
 const navItems=[
   {id:'home',lbl:'待辦事項',color:'var(--cream)'},
   {id:'calc',lbl:'計算機',color:'var(--pink)'},
+  {id:'note',lbl:'語音筆記',color:'var(--mint)'},
   {id:'fest',lbl:'重要節日',color:'var(--purple)'},
   {id:'fortune',lbl:'求籤',color:'var(--ruby)'},
   {id:'weather',lbl:'天氣',color:'var(--blue)'},
   {id:'map',lbl:'地圖',color:'var(--peach)'},
   {id:'news',lbl:'新聞',color:'var(--milktea)'},
-  {id:'note',lbl:'語音筆記',color:'var(--mint)'},
   {id:'settings',lbl:'設定',color:'var(--grey)'}
 ];
 function renderNav(){
@@ -185,7 +185,7 @@ function homeHTML(){
 
   <div class="card todo-list">
     <h2>📝 待辦事項</h2>
-    <div class="hint-banner"><span class="ic">💡</span><span>小提示：在上面月曆的日期上快速點兩下，就可以新增待辦事項；完成的項目點左邊方框打勾會變淡色；手指向左滑動會出現紅色「刪除」，再點一下才會真的刪除。</span></div>
+    ${hintBox('home','點兩下月曆日期可以新增待辦事項；完成的項目打勾會變淡色；手指向左滑動出現紅色「刪除」，再點一下才會真的刪除。')}
     ${renderReminderNote()}
     <div class="quick-add">
       <input id="quickTodoInput" placeholder="輸入新的待辦事項...">
@@ -295,6 +295,20 @@ function editTodo(id){
 function deleteTodo(id){todos=todos.filter(x=>x.id!==id);store.set('todos',todos);renderMain();}
 function speakAnnounce(){speak(document.getElementById('announceText').textContent);}
 function escapeHtml(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+/* small collapsible tip button — keeps auxiliary help text from eating up space at large font sizes */
+function hintBox(id,text){
+  return `<div class="hint-toggle-wrap">
+    <button class="hint-btn" data-hint="${id}" title="使用小提示">💡</button>
+    <div class="hint-panel hidden" id="hint-${id}">${text}</div>
+  </div>`;
+}
+document.addEventListener('click',(e)=>{
+  const hb=e.target.closest('.hint-btn');
+  if(hb){
+    const panel=document.getElementById('hint-'+hb.dataset.hint);
+    if(panel)panel.classList.toggle('hidden');
+  }
+},true);
 
 let clockInterval=null;
 function tickClock(){
@@ -345,7 +359,7 @@ function calcHTML(){
       </div>
     </div>
     <div class="calc-side">
-      <div class="hint-banner"><span class="ic">💡</span><span>小提示：按數字和符號後按「＝」計算，「加入小計」可以把這筆結果累加起來；紀錄旁的🗑可以刪掉單一筆紀錄，「清除全部紀錄」可以一次清空。</span></div>
+      ${hintBox('calc','按數字和符號後按「＝」計算，「加入小計」可以累加金額；紀錄旁的🗑可以刪掉單一筆，「清除全部紀錄」一次清空。')}
       <div class="card subtotal-box">
         <div style="font-weight:700;">🧾 本次購物小計</div>
         <div class="amt" id="subtotalAmt">${subtotal}</div>
@@ -394,30 +408,69 @@ function addToSubtotal(i){
 }
 function clearSubtotal(){subtotal=0;const el=document.getElementById('subtotalAmt');if(el)el.textContent='0';}
 
-/* ============ FESTIVALS ============ */
+/* ============ FESTIVALS (click a card to open detail) ============ */
 function festHTML(){
-  return `<div class="hint-banner"><span class="ic">💡</span><span>小提示：點一下供品文字就能直接修改，點「✕」可以刪除項目，點「＋新增」可以加入新的供品。</span></div>
+  return `${hintBox('fest','點一下節日卡片可以查看和修改供品內容。')}
   <div class="fest-grid">
     ${festivals.map(f=>`
-    <div class="card fest-card">
-      <div class="fhead"><div class="emoji">${f.emoji}</div><h3>${escapeHtml(f.name)}</h3></div>
-      ${f.time?`<div class="ftime">🌗🌗 ${escapeHtml(f.time)}</div>`:''}
-      <div class="fest-sec sec-guanyin">
-        <div class="sec-label">觀世音菩薩</div>
-        <div class="fest-pill-row">
-          ${f.guanyin.map((it,i)=>`<span class="fest-pill"><span contenteditable="true" onblur="updateFestItem('${f.id}','guanyin',${i},this.textContent)">${escapeHtml(it)}</span><span class="rm" onclick="removeFestItem('${f.id}','guanyin',${i})">✕</span></span>`).join('')}
-          <span class="fest-add" onclick="addFestItem('${f.id}','guanyin')">＋新增</span>
-        </div>
-      </div>
-      <div class="fest-sec sec-ancestor">
-        <div class="sec-label">祖先</div>
-        <div class="fest-pill-row">
-          ${f.ancestor.map((it,i)=>`<span class="fest-pill"><span contenteditable="true" onblur="updateFestItem('${f.id}','ancestor',${i},this.textContent)">${escapeHtml(it)}</span><span class="rm" onclick="removeFestItem('${f.id}','ancestor',${i})">✕</span></span>`).join('')}
-          <span class="fest-add" onclick="addFestItem('${f.id}','ancestor')">＋新增</span>
-        </div>
-      </div>
-    </div>`).join('')}
+      <div class="card fest-preview" data-id="${f.id}">
+        <div class="fp-emoji">${f.emoji}</div>
+        <div class="fp-name">${escapeHtml(f.name)}</div>
+      </div>`).join('')}
   </div>`;
+}
+function bindFestivals(){
+  document.querySelectorAll('.fest-preview').forEach(card=>{
+    card.addEventListener('click',()=>openFestivalModal(card.dataset.id));
+  });
+}
+function festivalDetailInner(f){
+  return `
+    <div class="fhead"><div class="emoji">${f.emoji}</div><h3>${escapeHtml(f.name)}</h3></div>
+    ${f.time?`<div class="ftime">🌗🌗 ${escapeHtml(f.time)}</div>`:''}
+    <div class="fest-sec sec-guanyin">
+      <div class="sec-label">觀世音菩薩</div>
+      <div class="fest-pill-row">
+        ${f.guanyin.map((it,i)=>`<span class="fest-pill"><span contenteditable="true" class="fe-edit" data-id="${f.id}" data-section="guanyin" data-i="${i}">${escapeHtml(it)}</span><span class="rm fe-rm" data-id="${f.id}" data-section="guanyin" data-i="${i}">✕</span></span>`).join('')}
+        <span class="fest-add fe-add" data-id="${f.id}" data-section="guanyin">＋新增</span>
+      </div>
+    </div>
+    <div class="fest-sec sec-ancestor">
+      <div class="sec-label">祖先</div>
+      <div class="fest-pill-row">
+        ${f.ancestor.map((it,i)=>`<span class="fest-pill"><span contenteditable="true" class="fe-edit" data-id="${f.id}" data-section="ancestor" data-i="${i}">${escapeHtml(it)}</span><span class="rm fe-rm" data-id="${f.id}" data-section="ancestor" data-i="${i}">✕</span></span>`).join('')}
+        <span class="fest-add fe-add" data-id="${f.id}" data-section="ancestor">＋新增</span>
+      </div>
+    </div>`;
+}
+function openFestivalModal(id){
+  const f=festivals.find(x=>x.id===id);if(!f)return;
+  const overlay=document.createElement('div');
+  overlay.className='modal-overlay';
+  overlay.innerHTML=`<div class="modal-box fest-modal-box">
+      <div id="festDetailInner">${festivalDetailInner(f)}</div>
+      <div class="modal-actions"><button class="btn btn-primary" id="festCloseBtn">關閉</button></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const inner=overlay.querySelector('#festDetailInner');
+  function refresh(){inner.innerHTML=festivalDetailInner(f);bindInner();}
+  function bindInner(){
+    inner.querySelectorAll('.fe-edit').forEach(el=>{
+      el.addEventListener('blur',()=>{updateFestItem(el.dataset.id,el.dataset.section,+el.dataset.i,el.textContent);});
+    });
+    inner.querySelectorAll('.fe-rm').forEach(el=>{
+      el.addEventListener('click',()=>{removeFestItem(el.dataset.id,el.dataset.section,+el.dataset.i);refresh();});
+    });
+    inner.querySelectorAll('.fe-add').forEach(el=>{
+      el.addEventListener('click',()=>{
+        const v=prompt('新增供品項目：');
+        if(v&&v.trim()){addFestItem(el.dataset.id,el.dataset.section,v.trim());refresh();}
+      });
+    });
+  }
+  bindInner();
+  overlay.querySelector('#festCloseBtn').onclick=()=>overlay.remove();
+  overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.remove();});
 }
 function updateFestItem(id,section,i,val){
   const f=festivals.find(x=>x.id===id);if(!f)return;
@@ -425,14 +478,11 @@ function updateFestItem(id,section,i,val){
 }
 function removeFestItem(id,section,i){
   const f=festivals.find(x=>x.id===id);if(!f)return;
-  f[section].splice(i,1);store.set('festivals',festivals);renderMain();
+  f[section].splice(i,1);store.set('festivals',festivals);
 }
-function addFestItem(id,section){
-  const v=prompt('新增供品項目：');
-  if(v&&v.trim()){
-    const f=festivals.find(x=>x.id===id);
-    f[section].push(v.trim());store.set('festivals',festivals);renderMain();
-  }
+function addFestItem(id,section,val){
+  const f=festivals.find(x=>x.id===id);if(!f)return;
+  f[section].push(val);store.set('festivals',festivals);
 }
 
 /* ============ WEATHER (illustrative / mock) ============ */
@@ -502,22 +552,23 @@ const QIAN_DATA=[
 let lastFortune=store.get('lastFortune',null);
 function fortuneHTML(){
   const has=!!lastFortune;
-  return `<div class="hint-banner"><span class="ic">💡</span><span>小提示：點一下籤筒就能求一支籤，看看今天的運勢。抽過的結果會留在這裡，家人想玩可以隨時進來再抽一次。內容僅供參考娛樂，別太當真喔！</span></div>
+  return `${hintBox('fortune','點一下籤卡就能求一支籤，看看今天的運勢。抽過的結果會留在這裡，家人想玩可以隨時再抽一次。內容僅供參考娛樂，別太當真喔！')}
   <div class="card fortune-card">
     <div class="fortune-stage">
+      <div class="f-stars" aria-hidden="true"></div>
+      <div class="f-moon" aria-hidden="true">🌙</div>
       <div class="f-eyebrow">誠　心　則　靈</div>
-      <div class="f-title">六十甲子籤</div>
-      <div class="f-subtitle">默念心中所問之事，再行抽籤</div>
-      <div class="f-smokewrap" aria-hidden="true"><div class="f-smoke"></div><div class="f-smoke"></div><div class="f-smoke"></div></div>
+      <div class="f-title">今日運籤</div>
+      <div class="f-subtitle">默念心中所問之事，選一張籤卡</div>
 
-      <div class="f-qiantong-wrap ${has?'hidden':''}" id="qiantongWrap">
-        <div class="f-qiantong" id="qiantong">
-          <div class="f-sticks" id="sticksLayer"></div>
-          <div class="f-tuberim"></div>
-          <div class="f-tubebody"></div>
+      <div class="f-deck-wrap ${has?'hidden':''}" id="qiantongWrap">
+        <div class="f-deck" id="qiantong">
+          <div class="f-card-back" style="transform:rotate(-9deg) translateX(-16px);">✦</div>
+          <div class="f-card-back" style="transform:rotate(0deg) translateY(-6px);">✦</div>
+          <div class="f-card-back" style="transform:rotate(9deg) translateX(16px);">✦</div>
         </div>
-        <div class="f-hint">點擊籤筒，搖出一支籤</div>
-        <button class="f-drawbtn" id="drawBtn">🙏　誠　心　抽　籤</button>
+        <div class="f-hint">輕點卡牌，抽一張籤</div>
+        <button class="f-drawbtn" id="drawBtn">✦　求　籤　✦</button>
       </div>
 
       <div class="f-flyingstick" id="flyingStick"></div>
@@ -544,27 +595,11 @@ function bindFortuneView(){
   const qiantongWrap=document.getElementById('qiantongWrap');
   const qiantong=document.getElementById('qiantong');
   const drawBtn=document.getElementById('drawBtn');
-  const sticksLayer=document.getElementById('sticksLayer');
   const flyingStick=document.getElementById('flyingStick');
   const resultCard=document.getElementById('resultCard');
   const cardInner=document.getElementById('cardInner');
   const againBtn=document.getElementById('againBtn');
   if(!qiantong)return;
-
-  const STICK_COUNT=12;
-  sticksLayer.innerHTML='';
-  for(let i=0;i<STICK_COUNT;i++){
-    const s=document.createElement('div');
-    s.className='f-stick';
-    const angle=(Math.random()*26-13).toFixed(1);
-    const leftOffset=(Math.random()*60-30).toFixed(1);
-    s.style.left=`calc(50% + ${leftOffset}px)`;
-    s.style.transform=`rotate(${angle}deg)`;
-    const tip=document.createElement('div');
-    tip.className='f-tip';
-    s.appendChild(tip);
-    sticksLayer.appendChild(s);
-  }
 
   let drawing=false;
   function drawQian(){
@@ -690,7 +725,7 @@ function getPosition(){
 }
 function weatherHTML(){
   return `
-  <div class="hint-banner"><span class="ic">💡</span><span>小提示：這裡會自動抓取你目前位置的即時天氣（需要允許定位權限與網路連線），如果沒有網路或定位，會改顯示示意資料。</span></div>
+  ${hintBox('weather','這裡會自動抓取你目前位置的即時天氣（需要允許定位權限與網路連線），沒有網路或定位時會改顯示示意資料。')}
   <div class="card">
     <h2 style="margin-top:0;">☁️ 今天天氣</h2>
     <div id="weatherBody"><div class="empty-hint">讀取天氣資料中...</div></div>
@@ -849,15 +884,17 @@ function openAddShortcutModal(list,storeKey,rerenderFn){
   };
 }
 
-/* ============ NEWS (real RSS via free rss2json proxy) + QUICK LINKS ============ */
+/* ============ NEWS (curated always-on links — the live RSS feed kept failing on real devices) ============ */
 const defaultLinks=[
+  {id:'google',img:'data:image/png;base64,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',name:'Google 搜尋',url:'https://www.google.com/'},
+  {id:'youtube',img:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAACgUlEQVR4nO3d3VEcMRCFUdnlPOwYIP8QIAY7EvuBku0CZkaj1fyo+5wAYGvvtz3LE6UAAAAAAAAAAAAAEXw585f9fHr6febvm9mP19dTtjn8lxj9cUfGcMgPNvpxRscw9IcZ/jyjQvg64oeUYvyzjXq/hwRg/GuMeN8fOiOGv4/eR0L3BTD+vfTu0RWA8e+pZ5fdARj/3vbuM+yvAOa0KwCf/jns2ak5AOPPpXWvpgCMP6eW3XwHSG4zAJ/+uW3t5wIkJ4DkVgNw/mNY29EFSE4AyS0G4PzHsrSnC5BcyAC+v7xc/RKmETKAUt4iEMK2sAFUIlgXPoBSXIM1KQKoRPBRqgBKcQ3eSxdAJYQ3aQOoskeQPoBScl8DAfwnYwgC+ESmCASwIMs1EMCG6BEIoEHkayCAHSKGIIAOkSIQQKco10AAD5o9BAEMMmsEAhhoxmsggAPMFIEADjLLNfh29QuI6tfz89UvoYkLcIBZxi/FBRhqpuErAQww4/CVAB4w8/CV7wCdIoxfiguwW5ThKwE0ijZ85RHQIOr4pbgAqyIPXwngExmGrzwC3sk0fikuwF/Zhq/SB5B1+CptANmHr1J+BzD+P6kugOE/ShGA4ZeFfwQYf13YC2D4NiEvgPHbhQyAdgJIbjGA3v9GzT0t7ekCJCeA5FYD8BiIYW1HFyA5ASS3GYDHwNy29nMBkmsKwBWYU8tuzRdABHNp3WvXI0AEc9izk+8Aye0OwBW4t737dF0AEdxTzy7djwAR3EvvHkNG9J/Gr/PoB3HIl0DX4Boj3vdhfwWI4Fyj3u9DRvNIOM7oD9rhn1oxPO7I63rq2RZDO49UAAAAAAAAAAAAdvoDmHHT5FU7oIAAAAAASUVORK5CYII=',name:'YouTube',url:'https://www.youtube.com/'},
+  {id:'line',img:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAADJklEQVR4nO2c3VHjQBAGlysKUjoCgSAhEC6l4wUeKBdyYUn7OzO7X3cAtne6NZL94JQAAAAAAECLO883f3h//vR8/0h8PL25uDB9U4TnYxWEyZsgvp7RIQx7caT3Z0QMf3q/YErIH8WIuXYtCvF29NoG3TYA8m3pNe8uASDfhx5zbw4A+b60zr8pAOTHoMVDdQDIj0Wtj6oAkB+TGi/FASA/NqV+igJA/hyUeBrySyDMQ3YAXP1zkesrKwDkz0mON24B4hCAOKcBsP7n5swfG0CcwwC4+tfgyCMbQBwCEIcAxNkNgPv/Wuz5vLf+IKX8//vq/RGaefz34v0RdgkZwArSt2zPEy2GUAGsJv4WlzNGCSHMQ6CC/C1RzhsigCjDsCbCud0DiDAET7zP7xqA9+Gj4DkHtwCQf43XPFwCQP5tPOZiHgDyj7Gej/tDIPhiGgBXfx6Wc2IDiEMA4pgFwPovw2pebABxCEAcAhCHAMQhAHEIQBwCEIcAxCEAcQhAHAIQhwDEIQBxCEAcAhCHAMQhAHEIQBwCEIcAxCEAcQhAHLMAovwlyixYzYsNIA4BiGMaALeBPCznxAYQxzwAtsAx1vNx2QBEcBuPubjdAojgGq95uD4DEME3nnNwfwhUj8D7/O4BpOQ/BC8inDtEACnFGIYlUc4b6u/iL0NZ+e9kooi/ECqAC9shrRBDNOlbQgawZW94vcKILMeCMM8AHqjLT0k4AOR/E/4W0BvEXyO1AZD/G5kAkH8biQCQv8/yASD/mKUDQP45ywaA/DyWDAD5+Sz1OwDiy1lmAyC/jiUCQH490weA/DZ2A/h4eruz/CA1ID+fPZ/TbgDk92HaAKAPBCDOYQAzPAfAOUce2QDinAbAFpibM39sAHEIQJysALgNzEmOt+wNQARzkeuLW4A4RQGwBeagxFPxBiCC2JT6qboFEEFMarxUPwMQQSxqfTQ9BBJBDFo8NH8LIAJfWuff5WsgEfjQY+7dfgcgAlt6zXuItIf3588Rrwv9L7QhvwSyDcYwYq4motgI9Yy+mEyvVELIx2qLuq5qgviB2yYAAAAAmPEFLVD2ZzDCEkAAAAAASUVORK5CYII=',name:'LINE 首頁',url:'https://line.me/zh-hant/'},
+  {id:'yahoo',img:'data:image/png;base64,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',name:'Yahoo奇摩',url:'https://tw.yahoo.com/'},
   {id:'weather-gov',ic:'🌦️',name:'中央氣象署',url:'https://www.cwa.gov.tw/'},
-  {id:'gov-service',ic:'🏛️',name:'台灣政府服務網',url:'https://www.gov.tw/'},
-  {id:'health',ic:'💊',name:'健保署',url:'https://www.nhi.gov.tw/'},
   {id:'transport',ic:'🚌',name:'公路客運動態',url:'https://www.taiwanbus.tw/ebuspage/Default.aspx?lan=C'}
 ];
 let quickLinks=store.get('quickLinks',defaultLinks);
-/* fix a previously-wrong default link for people who already saved the old version */
+/* fix a previously-wrong default link for people who already saved an older version */
 (function migrateQuickLinks(){
   let changed=false;
   quickLinks.forEach(l=>{
@@ -867,68 +904,12 @@ let quickLinks=store.get('quickLinks',defaultLinks);
   });
   if(changed)store.set('quickLinks',quickLinks);
 })();
-const NEWS_FEED_URL='https://news.ltn.com.tw/rss/all.xml';
-let newsItemsCache=[];
 function newsHTML(){
-  return `<div class="hint-banner"><span class="ic">💡</span><span>小提示：以下是自由時報電子報的即時新聞（需要網路連線）。點「閱讀全文」會另開新分頁看完整新聞。下方「常用連結」可以自己新增常去的網站，也可以上傳照片當作圖示。</span></div>
+  return `${hintBox('news','即時新聞在這個環境一直讀取失敗，所以換成大家最常用、不用登入就能用的網站捷徑。點圖示就直接開啟，也可以自己新增、修改或刪除，還能上傳照片當圖示。')}
   <div class="card">
-    <h2 style="margin-top:0;">📰 最新新聞</h2>
-    <div id="newsBody"><div class="empty-hint">讀取新聞中...</div></div>
-  </div>
-  <div class="card" style="margin-top:16px;">
-    <h2 style="margin-top:0;">🔗 常用連結</h2>
+    <h2 style="margin-top:0;">🔗 常用網站</h2>
     ${renderShortcutGrid(quickLinks,'linkGrid')}
   </div>`;
-}
-async function loadNews(){
-  const box=document.getElementById('newsBody');
-  if(!box)return;
-  try{
-    const url='https://api.rss2json.com/v1/api.json?rss_url='+encodeURIComponent(NEWS_FEED_URL)+'&count=6';
-    const res=await fetch(url);
-    if(!res.ok)throw new Error('fetch failed');
-    const data=await res.json();
-    if(data.status!=='ok'||!data.items||!data.items.length)throw new Error('no items');
-    newsItemsCache=data.items;
-    box.innerHTML=data.items.map((it,i)=>{
-      const img=it.thumbnail||(it.enclosure&&it.enclosure.link)||'';
-      const date=it.pubDate?it.pubDate.split(' ')[0]:'';
-      const desc=(it.description||'').replace(/<[^>]+>/g,'').trim().slice(0,60);
-      return `<div class="news-item">
-        <div class="thumb" data-idx="${i}">${img?'':'📰'}</div>
-        <div style="flex:1;">
-          <h4>${escapeHtml(it.title||'')}</h4>
-          <p>${date?date+'．':''}${escapeHtml(desc)}${desc.length>=60?'…':''}</p>
-          <button class="btn btn-soft" data-idx="${i}">閱讀全文</button>
-        </div>
-      </div>`;
-    }).join('')+`<div style="text-align:right;color:var(--ink-soft);font-size:calc(12px*var(--font-scale));margin-top:4px;">資料來源：自由時報電子報</div>`;
-    box.querySelectorAll('.thumb[data-idx]').forEach(div=>{
-      const it=newsItemsCache[+div.dataset.idx];
-      const img=it&&(it.thumbnail||(it.enclosure&&it.enclosure.link));
-      if(img){div.style.backgroundImage=`url(${JSON.stringify(img)})`;div.style.backgroundSize='cover';div.style.backgroundPosition='center';}
-    });
-    box.querySelectorAll('button[data-idx]').forEach(btn=>{
-      btn.addEventListener('click',()=>{
-        const link=newsItemsCache[+btn.dataset.idx]&&newsItemsCache[+btn.dataset.idx].link;
-        if(link)window.open(link,'_blank');
-      });
-    });
-  }catch(e){
-    box.innerHTML=`<div class="empty-hint">目前無法取得即時新聞（可能沒有網路連線，或這個預覽環境擋住了外部連線；正式上傳到 GitHub Pages 後應可正常讀取），暫時顯示示意內容。</div>`+mockNewsHTML();
-  }
-}
-function mockNewsHTML(){
-  const items=[
-    {ic:'📰',t:'社區里民活動中心本週六舉辦健康講座',s:'邀請專業醫師講解長者保健知識，歡迎攜伴參加。'},
-    {ic:'🌾',t:'颱風季將至 農委會呼籲農友及早防範',s:'氣象局提醒本週後半天氣不穩定，農友應加強作物防護。'},
-    {ic:'🚌',t:'公車路線調整公告 明日起試辦新路線',s:'部分路線將延駛至捷運站，方便長輩轉乘。'}
-  ];
-  return items.map(n=>`
-      <div class="news-item">
-        <div class="thumb">${n.ic}</div>
-        <div style="flex:1;"><h4>${n.t}</h4><p>${n.s}</p></div>
-      </div>`).join('');
 }
 
 /* ============ MAP (Google Maps navigation, no API key needed) ============ */
@@ -942,7 +923,7 @@ const defaultMapShortcuts=[
 ];
 let mapShortcuts=store.get('mapShortcuts',defaultMapShortcuts);
 function mapHTML(){
-  return `<div class="hint-banner"><span class="ic">💡</span><span>小提示：在框框輸入想去的地方，按「開始導航」會直接開啟 Google 地圖幫你規劃路線（手機上如果有安裝 Google 地圖 App 會直接開 App），Android 和 iPhone 都能使用。下面也有幾個最常用的查詢，點下去就能直接找附近的地點。</span></div>
+  return `${hintBox('map','輸入想去的地方按「開始導航」會用 Google 地圖規劃路線，Android、iPhone 都能用。下面有幾個最常用的查詢，點下去就能直接找附近地點。')}
   <div class="card">
     <h2 style="margin-top:0;">🗺 Google 地圖導航</h2>
     <div class="quick-add">
@@ -979,10 +960,10 @@ let recSecondsLeft=0;
 const MAX_REC_SECONDS=60;
 let voiceNotes=store.get('voiceNotes',[]);
 function noteHTML(){
-  return `<div class="hint-banner" style="text-align:left;"><span class="ic">💡</span><span>小提示：手指按住麥克風按鈕不放開始說話，最長可以錄 ${MAX_REC_SECONDS} 秒，時間到會自動停止。說完放開手指，AI 會自動整理成待辦事項。下面的筆記記錄可以點文字修改，也可以刪除。⚠️ iPhone 的 Safari 瀏覽器目前不支援語音辨識功能（蘋果的限制），這個功能在 Android 手機或電腦的 Chrome 瀏覽器上才能使用。</span></div>
+  return `${hintBox('note',`手指按住麥克風按鈕開始說話，最長可以錄 ${MAX_REC_SECONDS} 秒，時間到會自動停止。放開後內容會存到下面的「筆記記錄」，如果想加入待辦事項要自己按「加入待辦」。⚠️ iPhone 的 Safari 瀏覽器目前不支援語音辨識（蘋果的限制），請改用 Android 手機或電腦的 Chrome 瀏覽器。`)}
   <div class="card" style="text-align:center;">
     <h2>🎙 語音筆記</h2>
-    <p style="color:var(--ink-soft);">按住下方按鈕開始說話，放開即自動整理成待辦事項。</p>
+    <p style="color:var(--ink-soft);">按住下方按鈕開始說話，內容會存在下面「筆記記錄」，不會自動加入待辦事項。</p>
     <button class="note-mic" id="micBtn">🎤</button>
     <div class="note-timer" id="recTimer"></div>
     <div class="note-result" id="noteResult">尚未錄音</div>
@@ -999,11 +980,19 @@ function renderNoteHistory(){
       <div class="ntop">
         <span class="ntime">${n.time}</span>
         <div class="nact">
+          <button onclick="addNoteToTodo('${n.id}')" title="加入待辦事項">➕待辦</button>
           <button onclick="deleteVoiceNote('${n.id}')">🗑</button>
         </div>
       </div>
       <div class="ntxt" contenteditable="true" onblur="editVoiceNote('${n.id}',this.textContent)">${escapeHtml(n.text)}</div>
     </div>`).join('');
+}
+function addNoteToTodo(id){
+  const n=voiceNotes.find(x=>x.id===id);if(!n)return;
+  const parts=n.text.split(/[，。,\\.]|然後|還有/).map(s=>s.trim()).filter(Boolean);
+  parts.forEach(p=>todos.push({id:crypto.randomUUID(),text:p,done:false,date:null}));
+  store.set('todos',todos);
+  alert('已加入 '+parts.length+' 筆到待辦事項！');
 }
 function deleteVoiceNote(id){
   voiceNotes=voiceNotes.filter(n=>n.id!==id);
@@ -1086,15 +1075,7 @@ function processNote(text){
   const now=new Date();
   voiceNotes.push({id:crypto.randomUUID(),text:text.trim(),time:now.toLocaleString('zh-TW',{hour12:false})});
   store.set('voiceNotes',voiceNotes);
-  const parts=text.split(/[，。,\.]|然後|還有/).map(s=>s.trim()).filter(Boolean);
-  let html=`<div style="margin-bottom:8px;color:var(--ink-soft);">辨識內容：${escapeHtml(text)}</div><b>已整理成待辦事項：</b>`;
-  parts.forEach(p=>{
-    const id=crypto.randomUUID();
-    todos.push({id,text:p,done:false,date:null});
-    html+=`<div class="todo-item" style="margin-top:8px;"><div class="swipe-inner"><button class="chk"></button><div class="txt">${escapeHtml(p)}</div></div></div>`;
-  });
-  store.set('todos',todos);
-  res.innerHTML=html;
+  res.innerHTML=`<div style="color:var(--ink-soft);">辨識內容：${escapeHtml(text)}</div><div style="margin-top:6px;">已存到下面的筆記記錄，如果要加入待辦事項可以按「➕待辦」。</div>`;
   const hl=document.getElementById('noteHistoryList');
   if(hl)hl.innerHTML=renderNoteHistory();
 }
@@ -1102,7 +1083,7 @@ function processNote(text){
 /* ============ SETTINGS ============ */
 function settingsHTML(){
   const themes=[['pink','粉紅','var(--pink)'],['blue','粉藍','var(--blue)'],['milktea','奶茶','var(--milktea)'],['purple','淡紫','var(--purple)'],['mint','薄荷','var(--mint)']];
-  return `<div class="hint-banner"><span class="ic">💡</span><span>小提示：點選按鈕或色塊會馬上套用，不用另外按儲存。畫面右上角也有「❓」按鈕，可以隨時打開完整使用說明。</span></div>
+  return `${hintBox('settings','點選按鈕或色塊會馬上套用，不用另外按儲存。畫面右上角也有「❓」按鈕，可以隨時打開完整使用說明。')}
   <div class="settings-grid">
     <div class="set-row">
       <div class="label">🔤 字體大小</div>
@@ -1254,17 +1235,17 @@ function openHelp(){
       <h4>🧮 計算機</h4>
       <p>跟一般計算機一樣，按數字和加減乘除，按「＝」得到結果。可以切換粉紅／粉藍配色。右邊「本次購物小計」可以把任一筆計算結果加進去累計總金額。紀錄旁的🗑可以刪掉單一筆紀錄，「清除全部紀錄」可以一次清空。</p>
       <h4>🙏 重要節日</h4>
-      <p>顯示除夕、元宵、端午、中元、中秋、重陽、冬至要拜拜準備的東西，藍色底是「觀世音菩薩」、黃色底是「祖先」。點供品文字可以直接修改，點「✕」刪除，點「＋新增」可以加入新的項目，內容都會自動存起來。</p>
+      <p>點一下節日卡片就能查看和修改拜拜供品，藍色底是「觀世音菩薩」、黃色底是「祖先」。點供品文字可以直接修改，點「✕」刪除，點「＋新增」可以加入新的項目，內容都會自動存起來。</p>
       <h4>🎋 求籤</h4>
-      <p>點一下籤筒或按鈕就能求一支六十甲子籤，看看今天的運勢，會有搖籤和開籤的音效。抽過的結果會留著，家人想玩可以隨時進來按「再求一籤」。內容純屬民俗趣味，僅供參考。</p>
+      <p>點一下籤卡或按鈕就能求一支六十甲子籤，看看今天的運勢，會有搖籤和開籤的音效。抽過的結果會留著，家人想玩可以隨時進來按「再求一籤」。內容純屬民俗趣味，僅供參考。</p>
       <h4>☁️ 天氣</h4>
       <p>會自動抓取你目前所在位置的即時天氣（需要允許瀏覽器定位、並連上網路），顯示溫度、紫外線、風力、濕度、穿衣建議和一週預報。如果沒有網路或不給定位，會改顯示示意資料並註明。</p>
       <h4>🗺 地圖</h4>
       <p>輸入想去的地方按「開始導航」，會用 Google 地圖規劃路線，Android、iPhone 都能使用。下方「最常用的查詢」可以一鍵找附近醫院、藥局、超市等，也可以自己新增、刪除，或上傳照片當圖示。</p>
       <h4>📰 新聞</h4>
-      <p>會自動抓取「自由時報電子報」的即時新聞（需要網路連線），點「閱讀全文」會開新分頁看完整內容。下方「常用連結」可以自己新增常去的網站，也可以上傳照片當圖示，右上角「✕」可以刪除。</p>
+      <p>即時新聞在這個環境一直讀取失敗，所以這裡改成大家最常用、不用登入的網站捷徑（Google、YouTube、LINE、Yahoo奇摩等），點圖示就直接開啟。也可以自己新增、修改或刪除，並上傳照片當圖示。</p>
       <h4>🎙 語音筆記</h4>
-      <p>按住麥克風按鈕開始說話，最長可以錄 60 秒，時間到會自動停止，放開後 AI 會自動整理成待辦事項加入清單。下方「筆記記錄」會保留每一次的錄音文字，可以點文字直接修改，也可以按🗑刪除。⚠️ iPhone 的 Safari 瀏覽器不支援這個功能，請改用 Android 手機或電腦的 Chrome 瀏覽器。</p>
+      <p>按住麥克風按鈕開始說話，最長可以錄 60 秒，時間到會自動停止，內容會存到「筆記記錄」，<b>不會</b>自動加入待辦事項——想加入的話要自己按「➕待辦」。可以點文字直接修改，也可以按🗑刪除。⚠️ iPhone 的 Safari 瀏覽器不支援這個功能，請改用 Android 手機或電腦的 Chrome 瀏覽器。</p>
       <h4>⚙️ 設定</h4>
       <p>可以調整字體大小、主題色、深色／淺色模式、按鍵音效開關、語音播報速度和男女聲，還可以匯出或匯入資料備份。</p>
       <div class="help-close-wrap"><button class="btn btn-primary" id="helpClose">我知道了</button></div>
@@ -1288,9 +1269,10 @@ function afterRender(){
   }else if(clockInterval){clearInterval(clockInterval);clockInterval=null;}
   if(currentView==='note')setupMic();
   if(currentView==='weather')loadWeather();
-  if(currentView==='news'){loadNews();bindShortcutGrid('linkGrid',quickLinks,'quickLinks',renderMain);}
+  if(currentView==='news')bindShortcutGrid('linkGrid',quickLinks,'quickLinks',renderMain);
   if(currentView==='map')bindMapView();
   if(currentView==='fortune')bindFortuneView();
+  if(currentView==='fest')bindFestivals();
 }
 
 /* ============ INIT ============ */
