@@ -4,6 +4,7 @@
   --milktea:#E3CBA8; --milktea-deep:#D2AE80;
   --purple:#E5DBF2; --purple-deep:#D3C2EB;
   --mint:#D9EAE0; --mint-deep:#BEDCC9;
+  --peach:#F2E2D2; --peach-deep:#E3C7A8;
   --grey:#E7E2DA; --grey-deep:#D4CBBC;
   --cream:#FBF6EE;
   --ink:#6B584F; --ink-soft:#9A8A80;
@@ -177,9 +178,12 @@ button{font-family:inherit;}
 .link-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:10px;}
 .link-card{background:var(--cream);border-radius:16px;padding:14px 10px;text-align:center;cursor:pointer;position:relative;}
 .link-card .le{font-size:32px;}
+.link-card .le-img{width:44px;height:44px;border-radius:12px;object-fit:cover;}
 .link-card .ln{font-weight:700;font-size:calc(14px*var(--font-scale));margin-top:4px;}
 .link-card .lrm{position:absolute;top:4px;right:8px;color:var(--ink-soft);font-size:14px;cursor:pointer;}
 .link-add{background:transparent;border:2px dashed var(--ink-soft);border-radius:16px;padding:14px 10px;text-align:center;cursor:pointer;color:var(--ink-soft);font-weight:700;}
+.note-mic.disabled{opacity:0.55;}
+.sc-preview img{border-radius:14px;object-fit:cover;}
 
 /* ---- NOTE ---- */
 .note-mic{width:120px;height:120px;border-radius:50%;background:var(--accent);color:#fff;border:none;font-size:42px;margin:16px auto;display:flex;align-items:center;justify-content:center;cursor:pointer;user-select:none;}

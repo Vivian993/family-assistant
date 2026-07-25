@@ -57,7 +57,7 @@ const store={
   get(k,d){try{const v=localStorage.getItem('fla_'+k);return v?JSON.parse(v):d;}catch(e){return d;}},
   set(k,v){try{localStorage.setItem('fla_'+k,JSON.stringify(v));}catch(e){}}
 };
-let settings=store.get('settings',{fontScale:1,theme:'pink',dark:false,voiceRate:1,voiceGender:'female'});
+let settings=store.get('settings',{fontScale:1,theme:'pink',dark:false,voiceRate:1,voiceGender:'female',buttonSound:true});
 let todos=store.get('todos',[]);
 let calcHistory=store.get('calcHistory',[]);
 let calcTheme=store.get('calcTheme','pink');
@@ -83,6 +83,7 @@ const navItems=[
   {id:'calc',lbl:'計算機',color:'var(--pink)'},
   {id:'fest',lbl:'重要節日',color:'var(--purple)'},
   {id:'weather',lbl:'天氣',color:'var(--blue)'},
+  {id:'map',lbl:'地圖',color:'var(--peach)'},
   {id:'news',lbl:'新聞',color:'var(--milktea)'},
   {id:'note',lbl:'語音筆記',color:'var(--mint)'},
   {id:'settings',lbl:'設定',color:'var(--grey)'}
@@ -101,6 +102,7 @@ function renderMain(){
   else if(currentView==='calc')m.innerHTML=calcHTML();
   else if(currentView==='fest')m.innerHTML=festHTML();
   else if(currentView==='weather')m.innerHTML=weatherHTML();
+  else if(currentView==='map')m.innerHTML=mapHTML();
   else if(currentView==='news')m.innerHTML=newsHTML();
   else if(currentView==='note')m.innerHTML=noteHTML();
   else if(currentView==='settings')m.innerHTML=settingsHTML();
@@ -538,32 +540,133 @@ function renderWeatherBody(data,usedDefaultLoc){
     </div>`;
 }
 
+/* ============ SHARED "SHORTCUT GRID" COMPONENT (used by 新聞常用連結 + 地圖常用查詢) ============ */
+function renderShortcutGrid(list,containerId){
+  return `<div class="link-grid" id="${containerId}">
+    ${list.map((l,i)=>`
+      <div class="link-card" data-idx="${i}">
+        <span class="lrm" data-idx="${i}" data-action="remove">✕</span>
+        ${l.img?`<img class="le-img" src="${l.img}">`:`<div class="le">${l.ic||'🔗'}</div>`}
+        <div class="ln">${escapeHtml(l.name)}</div>
+      </div>`).join('')}
+    <div class="link-add" data-action="add">＋ 新增</div>
+  </div>`;
+}
+function bindShortcutGrid(containerId,list,storeKey,rerenderFn){
+  const el=document.getElementById(containerId);
+  if(!el)return;
+  el.querySelectorAll('.link-card').forEach(card=>{
+    const idx=+card.dataset.idx;
+    card.addEventListener('click',(e)=>{
+      if(e.target.dataset.action==='remove'){
+        list.splice(idx,1);
+        store.set(storeKey,list);
+        rerenderFn();
+        return;
+      }
+      const url=list[idx]&&list[idx].url;
+      if(url)window.open(url,'_blank');
+    });
+  });
+  const addBtn=el.querySelector('[data-action="add"]');
+  if(addBtn)addBtn.addEventListener('click',()=>openAddShortcutModal(list,storeKey,rerenderFn));
+}
+function compressImageFile(file,maxDim=160,quality=0.7){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>{
+      const img=new Image();
+      img.onload=()=>{
+        let w=img.width,h=img.height;
+        if(w>h){if(w>maxDim){h=Math.round(h*maxDim/w);w=maxDim;}}
+        else{if(h>maxDim){w=Math.round(w*maxDim/h);h=maxDim;}}
+        const canvas=document.createElement('canvas');
+        canvas.width=w;canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        resolve(canvas.toDataURL('image/jpeg',quality));
+      };
+      img.onerror=()=>reject(new Error('圖片讀取失敗'));
+      img.src=reader.result;
+    };
+    reader.onerror=()=>reject(new Error('檔案讀取失敗'));
+    reader.readAsDataURL(file);
+  });
+}
+function openAddShortcutModal(list,storeKey,rerenderFn){
+  const overlay=document.createElement('div');
+  overlay.className='modal-overlay';
+  overlay.innerHTML=`
+    <div class="modal-box">
+      <h3>新增常用項目</h3>
+      <input id="scName" placeholder="名稱（例如：農民曆、附近醫院）">
+      <input id="scUrl" placeholder="網址（例如：https://...）">
+      <div style="margin:2px 0 8px;font-size:calc(14px*var(--font-scale));color:var(--ink-soft);">圖示（擇一即可）：</div>
+      <input id="scEmoji" placeholder="輸入一個 emoji，例如 🏥" style="margin-bottom:8px;">
+      <label class="btn btn-ghost" style="display:inline-block;margin-bottom:14px;">
+        或上傳照片<input type="file" accept="image/*" id="scPhoto" style="display:none;">
+      </label>
+      <div class="sc-preview" id="scPreview" style="margin-bottom:10px;"></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="scCancel">取消</button>
+        <button class="btn btn-primary" id="scSave">儲存</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  let photoData=null;
+  overlay.querySelector('#scPhoto').addEventListener('change',async(e)=>{
+    const f=e.target.files[0];if(!f)return;
+    try{
+      photoData=await compressImageFile(f);
+      overlay.querySelector('#scPreview').innerHTML=`<img src="${photoData}" style="width:60px;height:60px;">`;
+    }catch(err){alert('照片處理失敗，請換一張試試。');}
+  });
+  const close=()=>overlay.remove();
+  overlay.querySelector('#scCancel').onclick=close;
+  overlay.addEventListener('click',e=>{if(e.target===overlay)close();});
+  overlay.querySelector('#scSave').onclick=()=>{
+    const name=overlay.querySelector('#scName').value.trim();
+    let url=overlay.querySelector('#scUrl').value.trim();
+    const emoji=overlay.querySelector('#scEmoji').value.trim();
+    if(!name||!url){alert('請輸入名稱和網址');return;}
+    if(!/^https?:\/\//i.test(url))url='https://'+url;
+    const item={id:crypto.randomUUID(),name,url};
+    if(photoData)item.img=photoData;else item.ic=emoji||'🔗';
+    list.push(item);
+    store.set(storeKey,list);
+    close();
+    rerenderFn();
+  };
+}
+
 /* ============ NEWS (real RSS via free rss2json proxy) + QUICK LINKS ============ */
 const defaultLinks=[
   {id:'weather-gov',ic:'🌦️',name:'中央氣象署',url:'https://www.cwa.gov.tw/'},
   {id:'gov-service',ic:'🏛️',name:'台灣政府服務網',url:'https://www.gov.tw/'},
   {id:'health',ic:'💊',name:'健保署',url:'https://www.nhi.gov.tw/'},
-  {id:'transport',ic:'🚌',name:'台灣公共運輸',url:'https://www.taiwan.gov.tw/'}
+  {id:'transport',ic:'🚌',name:'公路客運動態',url:'https://www.taiwanbus.tw/ebuspage/Default.aspx?lan=C'}
 ];
 let quickLinks=store.get('quickLinks',defaultLinks);
+/* fix a previously-wrong default link for people who already saved the old version */
+(function migrateQuickLinks(){
+  let changed=false;
+  quickLinks.forEach(l=>{
+    if(l.url==='https://www.taiwan.gov.tw/'&&l.name==='台灣公共運輸'){
+      l.name='公路客運動態';l.url='https://www.taiwanbus.tw/ebuspage/Default.aspx?lan=C';l.ic='🚌';changed=true;
+    }
+  });
+  if(changed)store.set('quickLinks',quickLinks);
+})();
 const NEWS_FEED_URL='https://about.pts.org.tw/rss/XML/newsfeed.xml';
+let newsItemsCache=[];
 function newsHTML(){
-  return `<div class="hint-banner"><span class="ic">💡</span><span>小提示：以下是公視新聞網的即時新聞（需要網路連線）。點「閱讀全文」會另開新分頁看完整新聞，看完把分頁關掉就會回到這裡。下方「常用連結」可以自己新增常去的網站，點圖示直接前往。</span></div>
+  return `<div class="hint-banner"><span class="ic">💡</span><span>小提示：以下是公視新聞網的即時新聞（需要網路連線）。點「閱讀全文」會另開新分頁看完整新聞。下方「常用連結」可以自己新增常去的網站，也可以上傳照片當作圖示。</span></div>
   <div class="card">
     <h2 style="margin-top:0;">📰 最新新聞</h2>
     <div id="newsBody"><div class="empty-hint">讀取新聞中...</div></div>
   </div>
   <div class="card" style="margin-top:16px;">
     <h2 style="margin-top:0;">🔗 常用連結</h2>
-    <div class="link-grid">
-      ${quickLinks.map(l=>`
-        <div class="link-card" onclick="window.open('${l.url}','_blank')">
-          <span class="lrm" onclick="event.stopPropagation();removeLink('${l.id}')">✕</span>
-          <div class="le">${l.ic}</div>
-          <div class="ln">${escapeHtml(l.name)}</div>
-        </div>`).join('')}
-      <div class="link-add" onclick="addLink()">＋ 新增連結</div>
-    </div>
+    ${renderShortcutGrid(quickLinks,'linkGrid')}
   </div>`;
 }
 async function loadNews(){
@@ -575,53 +678,87 @@ async function loadNews(){
     if(!res.ok)throw new Error('fetch failed');
     const data=await res.json();
     if(data.status!=='ok'||!data.items||!data.items.length)throw new Error('no items');
-    box.innerHTML=data.items.map(it=>{
+    newsItemsCache=data.items;
+    box.innerHTML=data.items.map((it,i)=>{
       const img=it.thumbnail||(it.enclosure&&it.enclosure.link)||'';
       const date=it.pubDate?it.pubDate.split(' ')[0]:'';
       const desc=(it.description||'').replace(/<[^>]+>/g,'').trim().slice(0,60);
       return `<div class="news-item">
-        <div class="thumb" style="${img?`background-image:url('${img.replace(/'/g,"")}');background-size:cover;background-position:center;`:''}">${img?'':'📰'}</div>
+        <div class="thumb" data-idx="${i}">${img?'':'📰'}</div>
         <div style="flex:1;">
-          <h4>${escapeHtml(it.title)}</h4>
+          <h4>${escapeHtml(it.title||'')}</h4>
           <p>${date?date+'．':''}${escapeHtml(desc)}${desc.length>=60?'…':''}</p>
-          <button class="btn btn-soft" onclick="window.open('${it.link}','_blank')">閱讀全文</button>
+          <button class="btn btn-soft" data-idx="${i}">閱讀全文</button>
         </div>
       </div>`;
     }).join('')+`<div style="text-align:right;color:var(--ink-soft);font-size:calc(12px*var(--font-scale));margin-top:4px;">資料來源：公視新聞網</div>`;
+    box.querySelectorAll('.thumb[data-idx]').forEach(div=>{
+      const it=newsItemsCache[+div.dataset.idx];
+      const img=it&&(it.thumbnail||(it.enclosure&&it.enclosure.link));
+      if(img){div.style.backgroundImage=`url(${JSON.stringify(img)})`;div.style.backgroundSize='cover';div.style.backgroundPosition='center';}
+    });
+    box.querySelectorAll('button[data-idx]').forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        const link=newsItemsCache[+btn.dataset.idx]&&newsItemsCache[+btn.dataset.idx].link;
+        if(link)window.open(link,'_blank');
+      });
+    });
   }catch(e){
-    box.innerHTML=`<div class="empty-hint">目前無法取得即時新聞（可能沒有網路連線），暫時顯示示意內容。</div>`+mockNewsHTML();
+    box.innerHTML=`<div class="empty-hint">目前無法取得即時新聞（可能沒有網路連線，或這個預覽環境擋住了外部連線；正式上傳到 GitHub Pages 後應可正常讀取），暫時顯示示意內容。</div>`+mockNewsHTML();
   }
 }
 function mockNewsHTML(){
   const items=[
-    {ic:'📰',t:'社區里民活動中心本週六舉辦健康講座',s:'邀請專業醫師講解長者保健知識，歡迎攜伴參加。',url:'#'},
-    {ic:'🌾',t:'颱風季將至 農委會呼籲農友及早防範',s:'氣象局提醒本週後半天氣不穩定，農友應加強作物防護。',url:'#'},
-    {ic:'🚌',t:'公車路線調整公告 明日起試辦新路線',s:'部分路線將延駛至捷運站，方便長輩轉乘。',url:'#'}
+    {ic:'📰',t:'社區里民活動中心本週六舉辦健康講座',s:'邀請專業醫師講解長者保健知識，歡迎攜伴參加。'},
+    {ic:'🌾',t:'颱風季將至 農委會呼籲農友及早防範',s:'氣象局提醒本週後半天氣不穩定，農友應加強作物防護。'},
+    {ic:'🚌',t:'公車路線調整公告 明日起試辦新路線',s:'部分路線將延駛至捷運站，方便長輩轉乘。'}
   ];
   return items.map(n=>`
       <div class="news-item">
         <div class="thumb">${n.ic}</div>
-        <div style="flex:1;">
-          <h4>${n.t}</h4><p>${n.s}</p>
-          <button class="btn btn-soft" onclick="window.open('${n.url}','_blank')">閱讀全文</button>
-        </div>
+        <div style="flex:1;"><h4>${n.t}</h4><p>${n.s}</p></div>
       </div>`).join('');
 }
-function addLink(){
-  const name=prompt('網站名稱（例如：郵局、里長辦公室）：');
-  if(!name||!name.trim())return;
-  let url=prompt('網址（例如：https://www.gov.tw）：');
-  if(!url||!url.trim())return;
-  if(!/^https?:\/\//i.test(url))url='https://'+url;
-  const ic=prompt('選一個小圖示 emoji（可留空，預設 🔗）：','🔗')||'🔗';
-  quickLinks.push({id:crypto.randomUUID(),ic,name:name.trim(),url});
-  store.set('quickLinks',quickLinks);
-  renderMain();
+
+/* ============ MAP (Google Maps navigation, no API key needed) ============ */
+const defaultMapShortcuts=[
+  {id:'almanac',ic:'📆',name:'農民曆查詢',url:'https://ecal.click108.com.tw/'},
+  {id:'hospital',ic:'🏥',name:'附近醫院',url:'https://www.google.com/maps/search/?api=1&query=%E9%86%AB%E9%99%A2'},
+  {id:'pharmacy',ic:'💊',name:'附近藥局',url:'https://www.google.com/maps/search/?api=1&query=%E8%97%A5%E5%B1%80'},
+  {id:'market',ic:'🛒',name:'附近超市',url:'https://www.google.com/maps/search/?api=1&query=%E8%B6%85%E5%B8%82'},
+  {id:'temple',ic:'⛩️',name:'附近廟宇',url:'https://www.google.com/maps/search/?api=1&query=%E5%BB%9F'},
+  {id:'post',ic:'📮',name:'附近郵局',url:'https://www.google.com/maps/search/?api=1&query=%E9%83%B5%E5%B1%80'}
+];
+let mapShortcuts=store.get('mapShortcuts',defaultMapShortcuts);
+function mapHTML(){
+  return `<div class="hint-banner"><span class="ic">💡</span><span>小提示：在框框輸入想去的地方，按「開始導航」會直接開啟 Google 地圖幫你規劃路線（手機上如果有安裝 Google 地圖 App 會直接開 App），Android 和 iPhone 都能使用。下面也有幾個最常用的查詢，點下去就能直接找附近的地點。</span></div>
+  <div class="card">
+    <h2 style="margin-top:0;">🗺 Google 地圖導航</h2>
+    <div class="quick-add">
+      <input id="mapDestInput" placeholder="輸入目的地，例如：台北車站">
+      <button class="btn btn-primary" id="mapGoBtn">🧭 開始導航</button>
+    </div>
+    <iframe id="mapEmbed" src="https://maps.google.com/maps?q=Taiwan&z=8&output=embed" style="width:100%;height:320px;border:0;border-radius:16px;margin-top:8px;" loading="lazy"></iframe>
+  </div>
+  <div class="card" style="margin-top:16px;">
+    <h2 style="margin-top:0;">🔎 最常用的查詢</h2>
+    ${renderShortcutGrid(mapShortcuts,'mapGrid')}
+  </div>`;
 }
-function removeLink(id){
-  quickLinks=quickLinks.filter(l=>l.id!==id);
-  store.set('quickLinks',quickLinks);
-  renderMain();
+function bindMapView(){
+  bindShortcutGrid('mapGrid',mapShortcuts,'mapShortcuts',renderMain);
+  const inp=document.getElementById('mapDestInput');
+  const go=document.getElementById('mapGoBtn');
+  const embed=document.getElementById('mapEmbed');
+  if(!inp||!go)return;
+  const doNav=()=>{
+    const v=inp.value.trim();
+    if(!v)return;
+    window.open('https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(v),'_blank');
+    if(embed)embed.src='https://maps.google.com/maps?q='+encodeURIComponent(v)+'&z=14&output=embed';
+  };
+  go.addEventListener('click',doNav);
+  inp.addEventListener('keypress',e=>{if(e.key==='Enter')doNav();});
 }
 
 /* ============ 語音筆記 ============ */
@@ -631,7 +768,7 @@ let recSecondsLeft=0;
 const MAX_REC_SECONDS=60;
 let voiceNotes=store.get('voiceNotes',[]);
 function noteHTML(){
-  return `<div class="hint-banner" style="text-align:left;"><span class="ic">💡</span><span>小提示：手指按住麥克風按鈕不放開始說話，最長可以錄 ${MAX_REC_SECONDS} 秒，時間到會自動停止。說完放開手指，AI 會自動整理成待辦事項。下面的筆記記錄可以點文字修改，也可以刪除。</span></div>
+  return `<div class="hint-banner" style="text-align:left;"><span class="ic">💡</span><span>小提示：手指按住麥克風按鈕不放開始說話，最長可以錄 ${MAX_REC_SECONDS} 秒，時間到會自動停止。說完放開手指，AI 會自動整理成待辦事項。下面的筆記記錄可以點文字修改，也可以刪除。⚠️ iPhone 的 Safari 瀏覽器目前不支援語音辨識功能（蘋果的限制），這個功能在 Android 手機或電腦的 Chrome 瀏覽器上才能使用。</span></div>
   <div class="card" style="text-align:center;">
     <h2>🎙 語音筆記</h2>
     <p style="color:var(--ink-soft);">按住下方按鈕開始說話，放開即自動整理成待辦事項。</p>
@@ -671,12 +808,16 @@ function setupMic(){
   const btn=document.getElementById('micBtn');if(!btn)return;
   const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SpeechRecognition){
-    btn.onclick=()=>{document.getElementById('noteResult').textContent='此瀏覽器不支援語音辨識，請改用文字輸入待辦事項。';};
+    btn.classList.add('disabled');
+    btn.addEventListener('click',()=>{
+      document.getElementById('noteResult').textContent='這個瀏覽器不支援語音辨識功能——iPhone 的 Safari 目前還不支援這個功能（這是蘋果瀏覽器的限制，無法用網頁解決）。建議改用 Android 手機的 Chrome 瀏覽器，或直接在「待辦事項」頁面用文字輸入。';
+    });
     return;
   }
   recognition=new SpeechRecognition();
   recognition.lang='zh-TW';recognition.continuous=true;recognition.interimResults=true;
   let finalText='';
+  let active=false;
   recognition.onresult=(e)=>{
     let interim='';
     for(let i=e.resultIndex;i<e.results.length;i++){
@@ -685,28 +826,44 @@ function setupMic(){
     }
     document.getElementById('noteResult').textContent=finalText+interim;
   };
+  recognition.onerror=(e)=>{
+    const res=document.getElementById('noteResult');
+    if(res){
+      if(e.error==='not-allowed'||e.error==='service-not-allowed')res.textContent='沒有取得麥克風權限，請到瀏覽器設定允許這個網站使用麥克風後再試一次。';
+      else if(e.error==='no-speech')res.textContent='沒有聽到聲音，請靠近麥克風再說一次。';
+      else res.textContent='錄音發生問題（'+e.error+'），請再試一次。';
+    }
+    resetMicUI();
+  };
+  function resetMicUI(){
+    active=false;
+    btn.classList.remove('rec');btn.textContent='🎤';
+    if(recTimerInterval){clearInterval(recTimerInterval);recTimerInterval=null;}
+    const rt=document.getElementById('recTimer');if(rt)rt.textContent='';
+  }
   const start=(ev)=>{
-    ev.preventDefault();finalText='';
+    if(active)return;
+    ev.preventDefault();
+    active=true;finalText='';
     try{recognition.start();}catch(e){}
     btn.classList.add('rec');btn.textContent='●';
     recSecondsLeft=MAX_REC_SECONDS;
     updateRecTimer();
     recTimerInterval=setInterval(()=>{
-      recSecondsLeft--;
-      updateRecTimer();
+      recSecondsLeft--;updateRecTimer();
       if(recSecondsLeft<=0)stop();
     },1000);
   };
   const stop=()=>{
-    if(!btn.classList.contains('rec'))return;
+    if(!active)return;
     try{recognition.stop();}catch(e){}
-    btn.classList.remove('rec');btn.textContent='🎤';
-    if(recTimerInterval){clearInterval(recTimerInterval);recTimerInterval=null;}
-    const rt=document.getElementById('recTimer');if(rt)rt.textContent='';
+    resetMicUI();
     setTimeout(()=>processNote(finalText),400);
   };
-  btn.addEventListener('mousedown',start);btn.addEventListener('touchstart',start);
-  btn.addEventListener('mouseup',stop);btn.addEventListener('touchend',stop);
+  btn.addEventListener('pointerdown',start);
+  btn.addEventListener('pointerup',stop);
+  btn.addEventListener('pointerleave',stop);
+  btn.addEventListener('pointercancel',stop);
 }
 function updateRecTimer(){
   const rt=document.getElementById('recTimer');
@@ -765,6 +922,14 @@ function settingsHTML(){
         <button class="btn ${settings.voiceGender==='female'?'btn-primary':'btn-ghost'}" onclick="setVoiceGender('female')">女聲</button>
         <button class="btn ${settings.voiceGender==='male'?'btn-primary':'btn-ghost'}" onclick="setVoiceGender('male')">男聲</button>
       </div>
+      <div style="font-size:calc(12px*var(--font-scale));color:var(--ink-soft);margin-top:6px;">部分手機只有一種中文語音，這時候男女聲會用音調高低來區分，不一定聽起來像真的男聲女聲。</div>
+    </div>
+    <div class="set-row">
+      <div class="label">🔔 按鍵音效</div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn ${settings.buttonSound!==false?'btn-primary':'btn-ghost'}" onclick="setButtonSound(true)">🔊 開啟</button>
+        <button class="btn ${settings.buttonSound===false?'btn-primary':'btn-ghost'}" onclick="setButtonSound(false)">🔇 關閉</button>
+      </div>
     </div>
     <div class="set-row">
       <div class="label">💾 資料備份</div>
@@ -780,6 +945,7 @@ function setTheme(t){settings.theme=t;applySettings();store.set('settings',setti
 function setDark(v){settings.dark=v;applySettings();store.set('settings',settings);renderMain();}
 function setVoiceRate(v){settings.voiceRate=parseFloat(v);store.set('settings',settings);}
 function setVoiceGender(g){settings.voiceGender=g;store.set('settings',settings);renderMain();}
+function setButtonSound(v){settings.buttonSound=v;store.set('settings',settings);renderMain();if(v)playClickSound();}
 function applySettings(){
   document.documentElement.style.setProperty('--font-scale',settings.fontScale);
   document.body.classList.toggle('dark',settings.dark);
@@ -811,6 +977,37 @@ function importData(e){
   reader.readAsText(file);
 }
 
+/* ============ BUTTON CLICK SOUND ============ */
+let audioCtx=null;
+function ensureAudioCtx(){
+  if(!audioCtx){
+    try{audioCtx=new (window.AudioContext||window.webkitAudioContext)();}catch(e){}
+  }
+  return audioCtx;
+}
+function playClickSound(){
+  if(settings.buttonSound===false)return;
+  const ctx=ensureAudioCtx();
+  if(!ctx)return;
+  if(ctx.state==='suspended')ctx.resume();
+  const t=ctx.currentTime;
+  const osc=ctx.createOscillator();
+  const gain=ctx.createGain();
+  osc.type='sine';
+  osc.frequency.setValueAtTime(880,t);
+  osc.frequency.exponentialRampToValueAtTime(660,t+0.07);
+  gain.gain.setValueAtTime(0.0001,t);
+  gain.gain.exponentialRampToValueAtTime(0.18,t+0.012);
+  gain.gain.exponentialRampToValueAtTime(0.0001,t+0.1);
+  osc.connect(gain);gain.connect(ctx.destination);
+  osc.start(t);
+  osc.stop(t+0.11);
+}
+document.addEventListener('click',(e)=>{
+  const el=e.target.closest('button, .nav-btn, .cal-cell, .link-card, .theme-tab, .chk, .fest-add');
+  if(el)playClickSound();
+},true);
+
 /* ============ SPEECH ============ */
 function speak(text){
   if(!('speechSynthesis' in window))return;
@@ -819,10 +1016,18 @@ function speak(text){
   u.lang='zh-TW';u.rate=settings.voiceRate||1;
   const voices=window.speechSynthesis.getVoices();
   const zhVoices=voices.filter(v=>v.lang.startsWith('zh'));
+  const maleHints=/male|男|zhiwei|yunjian|yunyang|kangkang|wang(?!g)/i;
+  const femaleHints=/female|女|yating|xiaoxiao|meijia|huihui|tingting|mei-?jia/i;
   if(zhVoices.length){
-    const pick=zhVoices.find(v=>settings.voiceGender==='male'?/male/i.test(v.name):/female/i.test(v.name))||zhVoices[0];
-    u.voice=pick;
+    let picked=zhVoices.find(v=>settings.voiceGender==='male'?maleHints.test(v.name):femaleHints.test(v.name));
+    if(!picked&&zhVoices.length>1){
+      /* no name hint available — fall back to picking a different voice per gender so it's at least audibly different */
+      picked=settings.voiceGender==='male'?zhVoices[zhVoices.length-1]:zhVoices[0];
+    }
+    u.voice=picked||zhVoices[0];
   }
+  /* many phones only ship ONE Chinese voice, so also shift pitch — this guarantees male/female sound different even then */
+  u.pitch=settings.voiceGender==='male'?0.75:1.15;
   window.speechSynthesis.speak(u);
 }
 
@@ -841,12 +1046,14 @@ function openHelp(){
       <p>顯示除夕、元宵、端午、中元、中秋、重陽、冬至要拜拜準備的東西，藍色底是「觀世音菩薩」、黃色底是「祖先」。點供品文字可以直接修改，點「✕」刪除，點「＋新增」可以加入新的項目，內容都會自動存起來。</p>
       <h4>☁️ 天氣</h4>
       <p>會自動抓取你目前所在位置的即時天氣（需要允許瀏覽器定位、並連上網路），顯示溫度、紫外線、風力、濕度、穿衣建議和一週預報。如果沒有網路或不給定位，會改顯示示意資料並註明。</p>
+      <h4>🗺 地圖</h4>
+      <p>輸入想去的地方按「開始導航」，會用 Google 地圖規劃路線，Android、iPhone 都能使用。下方「最常用的查詢」可以一鍵找附近醫院、藥局、超市等，也可以自己新增、刪除，或上傳照片當圖示。</p>
       <h4>📰 新聞</h4>
-      <p>會自動抓取「公視新聞網」的即時新聞（需要網路連線），點「閱讀全文」會開新分頁看完整內容。下方「常用連結」可以自己新增常去的網站（例如氣象局、政府服務網），點圖示直接前往，右上角「✕」可以刪除。</p>
+      <p>會自動抓取「公視新聞網」的即時新聞（需要網路連線），點「閱讀全文」會開新分頁看完整內容。下方「常用連結」可以自己新增常去的網站，也可以上傳照片當圖示，右上角「✕」可以刪除。</p>
       <h4>🎙 語音筆記</h4>
-      <p>按住麥克風按鈕開始說話，最長可以錄 60 秒，時間到會自動停止，放開後 AI 會自動整理成待辦事項加入清單。下方「筆記記錄」會保留每一次的錄音文字，可以點文字直接修改，也可以按🗑刪除。</p>
+      <p>按住麥克風按鈕開始說話，最長可以錄 60 秒，時間到會自動停止，放開後 AI 會自動整理成待辦事項加入清單。下方「筆記記錄」會保留每一次的錄音文字，可以點文字直接修改，也可以按🗑刪除。⚠️ iPhone 的 Safari 瀏覽器不支援這個功能，請改用 Android 手機或電腦的 Chrome 瀏覽器。</p>
       <h4>⚙️ 設定</h4>
-      <p>可以調整字體大小、主題色、深色／淺色模式、語音播報速度和男女聲，還可以匯出或匯入資料備份。</p>
+      <p>可以調整字體大小、主題色、深色／淺色模式、按鍵音效開關、語音播報速度和男女聲，還可以匯出或匯入資料備份。</p>
       <div class="help-close-wrap"><button class="btn btn-primary" id="helpClose">我知道了</button></div>
     </div>`;
   document.body.appendChild(overlay);
@@ -868,7 +1075,8 @@ function afterRender(){
   }else if(clockInterval){clearInterval(clockInterval);clockInterval=null;}
   if(currentView==='note')setupMic();
   if(currentView==='weather')loadWeather();
-  if(currentView==='news')loadNews();
+  if(currentView==='news'){loadNews();bindShortcutGrid('linkGrid',quickLinks,'quickLinks',renderMain);}
+  if(currentView==='map')bindMapView();
 }
 
 /* ============ INIT ============ */
