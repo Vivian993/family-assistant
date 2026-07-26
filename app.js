@@ -117,7 +117,6 @@ function isRedDay(y,m,d){
   return l.day===1||l.day===15;
 }
 function homeHTML(){
-  ensureLunarReminders();
   const now=new Date();
   const wd=['日','一','二','三','四','五','六'][now.getDay()];
   const l=solar2lunar(now.getFullYear(),now.getMonth()+1,now.getDate());
@@ -194,10 +193,20 @@ function homeHTML(){
     ${todoHTML}
   </div>`;
 }
+function getUpcomingTodos(){
+  const today=new Date();today.setHours(0,0,0,0);
+  const limit=new Date(today);limit.setDate(today.getDate()+3);
+  return todos.filter(t=>{
+    if(t.done||!t.date)return false;
+    const parts=t.date.split('-').map(Number);
+    const dt=new Date(parts[0],parts[1]-1,parts[2]);
+    return dt>=today&&dt<=limit;
+  }).sort((a,b)=>a.date.localeCompare(b.date));
+}
 function renderReminderNote(){
-  const upcoming=todos.filter(t=>t.type==='reminder'&&!t.done);
+  const upcoming=getUpcomingTodos();
   if(!upcoming.length)return'';
-  return `<div class="reminder-note">🔔 提醒：${upcoming.map(t=>escapeHtml(t.text)).join('；')}</div>`;
+  return `<div class="reminder-note reminder-blink">⏰ 即將到期：${upcoming.map(t=>`${escapeHtml(t.text)}（${t.date}）`).join('；')}</div>`;
 }
 function formatTimeZh(d){
   let h=d.getHours(),m=d.getMinutes();
@@ -211,26 +220,12 @@ function changeMonth(delta){
   if(calMonth>11){calMonth=0;calYear++;}
   renderMain();
 }
-/* auto reminder 2 days before lunar 初一/十五, scanning the next 30 days */
-function ensureLunarReminders(){
-  const today=new Date();today.setHours(0,0,0,0);
-  for(let i=0;i<30;i++){
-    const check=new Date(today);check.setDate(today.getDate()+i);
-    const l=solar2lunar(check.getFullYear(),check.getMonth()+1,check.getDate());
-    if(l.day===1||l.day===15){
-      const remindDate=new Date(check);remindDate.setDate(check.getDate()-2);
-      if(remindDate>=today){
-        const key=`${remindDate.getFullYear()}-${remindDate.getMonth()+1}-${remindDate.getDate()}`;
-        const text=`農曆${l.day===1?'初一':'十五'}將至，記得準備供品`;
-        const exists=todos.some(t=>t.date===key&&t.text===text);
-        if(!exists){
-          todos.push({id:crypto.randomUUID(),text,done:false,date:key,type:'reminder'});
-        }
-      }
-    }
-  }
-  store.set('todos',todos);
-}
+/* one-time cleanup: this app used to auto-insert 農曆初一/十五 worship reminders as todos — that's retired now */
+(function purgeOldLunarReminders(){
+  const before=todos.length;
+  todos=todos.filter(t=>t.type!=='reminder');
+  if(todos.length!==before)store.set('todos',todos);
+})();
 
 /* ---- add-todo modal (double-tap a calendar cell) ---- */
 let lastTapInfo=null;
@@ -981,8 +976,52 @@ const defaultMapShortcuts=[
   {id:'post',ic:'📮',name:'附近郵局',url:'https://www.google.com/maps/search/?api=1&query=%E9%83%B5%E5%B1%80'}
 ];
 let mapShortcuts=store.get('mapShortcuts',defaultMapShortcuts);
+let savedPlaces=store.get('savedPlaces',[]);
+function placesGridHTML(){
+  return `<div class="place-grid">
+    ${savedPlaces.map(p=>`
+      <div class="card place-card">
+        <div class="place-name">📍 ${escapeHtml(p.name)}</div>
+        <div class="place-addr">${escapeHtml(p.address)}</div>
+        <div class="place-actions">
+          <button class="btn btn-soft place-nav" data-id="${p.id}">🧭 導航</button>
+          <button class="btn btn-ghost place-rm" data-id="${p.id}">刪除</button>
+        </div>
+      </div>`).join('')}
+    <div class="card place-card place-add" id="placeAddCard">
+      <div style="font-size:32px;">➕</div>
+      <div class="place-name">新增常去地點</div>
+    </div>
+  </div>`;
+}
+function openAddPlaceModal(){
+  const overlay=document.createElement('div');
+  overlay.className='modal-overlay';
+  overlay.innerHTML=`<div class="modal-box">
+    <h3>新增常去地點</h3>
+    <input id="placeName" placeholder="地點名稱，例如：家裡、○○醫院">
+    <input id="placeAddr" placeholder="完整地址">
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="placeCancel">取消</button>
+      <button class="btn btn-primary" id="placeSave">儲存</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  const close=()=>overlay.remove();
+  overlay.querySelector('#placeCancel').onclick=close;
+  overlay.addEventListener('click',e=>{if(e.target===overlay)close();});
+  overlay.querySelector('#placeSave').onclick=()=>{
+    const name=overlay.querySelector('#placeName').value.trim();
+    const addr=overlay.querySelector('#placeAddr').value.trim();
+    if(!name||!addr){alert('請輸入名稱和地址');return;}
+    savedPlaces.push({id:crypto.randomUUID(),name,address:addr});
+    store.set('savedPlaces',savedPlaces);
+    close();
+    renderMain();
+  };
+}
 function mapHTML(){
-  return `${hintBox('map','輸入想去的地方按「開始導航」會用 Google 地圖規劃路線，Android、iPhone 都能用。下面有幾個最常用的查詢，點下去就能直接找附近地點。')}
+  return `${hintBox('map','輸入想去的地方按「開始導航」會用 Google 地圖規劃路線，Android、iPhone 都能用。地圖本身一定要有網路才能查詢和導航；但下面「常去地點」存的名稱和地址，沒有網路也看得到，有網路時按「導航」就能直接開路線。')}
   <div class="card">
     <h2 style="margin-top:0;">🗺 Google 地圖導航</h2>
     <div class="quick-add">
@@ -990,6 +1029,10 @@ function mapHTML(){
       <button class="btn btn-primary" id="mapGoBtn">🧭 開始導航</button>
     </div>
     <iframe id="mapEmbed" src="https://maps.google.com/maps?q=Taiwan&z=8&output=embed" style="width:100%;height:320px;border:0;border-radius:16px;margin-top:8px;" loading="lazy"></iframe>
+  </div>
+  <div class="card" style="margin-top:16px;">
+    <h2 style="margin-top:0;">📍 我的常去地點</h2>
+    ${placesGridHTML()}
   </div>
   <div class="card" style="margin-top:16px;">
     <h2 style="margin-top:0;">🔎 最常用的查詢</h2>
@@ -1001,15 +1044,31 @@ function bindMapView(){
   const inp=document.getElementById('mapDestInput');
   const go=document.getElementById('mapGoBtn');
   const embed=document.getElementById('mapEmbed');
-  if(!inp||!go)return;
-  const doNav=()=>{
-    const v=inp.value.trim();
-    if(!v)return;
-    window.open('https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(v),'_blank');
-    if(embed)embed.src='https://maps.google.com/maps?q='+encodeURIComponent(v)+'&z=14&output=embed';
-  };
-  go.addEventListener('click',doNav);
-  inp.addEventListener('keypress',e=>{if(e.key==='Enter')doNav();});
+  if(inp&&go){
+    const doNav=()=>{
+      const v=inp.value.trim();
+      if(!v)return;
+      window.open('https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(v),'_blank');
+      if(embed)embed.src='https://maps.google.com/maps?q='+encodeURIComponent(v)+'&z=14&output=embed';
+    };
+    go.addEventListener('click',doNav);
+    inp.addEventListener('keypress',e=>{if(e.key==='Enter')doNav();});
+  }
+  document.querySelectorAll('.place-nav').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const p=savedPlaces.find(x=>x.id===btn.dataset.id);
+      if(p)window.open('https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(p.address),'_blank');
+    });
+  });
+  document.querySelectorAll('.place-rm').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      savedPlaces=savedPlaces.filter(p=>p.id!==btn.dataset.id);
+      store.set('savedPlaces',savedPlaces);
+      renderMain();
+    });
+  });
+  const placeAddCard=document.getElementById('placeAddCard');
+  if(placeAddCard)placeAddCard.addEventListener('click',openAddPlaceModal);
 }
 
 /* ============ 語音筆記 ============ */
@@ -1290,7 +1349,7 @@ function openHelp(){
     <div class="modal-box help-box">
       <h3>❓ 使用說明</h3>
       <h4>📅 待辦事項</h4>
-      <p>快速點兩下月曆上的日期，會跳出視窗，日期已經幫你填好，輸入內容按「儲存」即可。完成的事項點左邊方框打勾，會自動變成淡色。手指在項目上向左滑，會出現紅色「刪除」，再點一下才會刪除，避免不小心點錯。上方按「🔊 播報」會用語音唸出今天的日期和時間。</p>
+      <p>快速點兩下月曆上的日期，會跳出視窗，日期已經幫你填好，輸入內容按「儲存」即可。完成的事項點左邊方框打勾，會自動變成淡色。手指在項目上向左滑，會出現紅色「刪除」，再點一下才會刪除，避免不小心點錯。上方按「🔊 播報」會用語音唸出今天的日期和時間。如果有 3 天內快到期的待辦事項，會在上面用黃色小提醒閃一下。</p>
       <h4>🧮 計算機</h4>
       <p>跟一般計算機一樣，按數字和加減乘除，按「＝」得到結果。可以切換粉紅／粉藍配色。右邊「本次購物小計」可以把任一筆計算結果加進去累計總金額。紀錄旁的🗑可以刪掉單一筆紀錄，「清除全部紀錄」可以一次清空。</p>
       <h4>🙏 重要節日</h4>
@@ -1300,7 +1359,7 @@ function openHelp(){
       <h4>☁️ 天氣</h4>
       <p>會自動抓取你目前所在位置的即時天氣（需要允許瀏覽器定位、並連上網路），顯示溫度、紫外線、風力、濕度、穿衣建議和一週預報。如果沒有網路或不給定位，會改顯示示意資料並註明。</p>
       <h4>🗺 地圖</h4>
-      <p>輸入想去的地方按「開始導航」，會用 Google 地圖規劃路線，Android、iPhone 都能使用。下方「最常用的查詢」可以一鍵找附近醫院、藥局、超市等，也可以自己新增、刪除，或上傳照片當圖示。</p>
+      <p>輸入想去的地方按「開始導航」，會用 Google 地圖規劃路線，Android、iPhone 都能使用——但地圖查詢和導航一定要有網路才能用。「常去地點」可以先存好名稱和地址，沒有網路也看得到地址，有網路時按「導航」直接開路線。下方「最常用的查詢」可以一鍵找附近醫院、藥局、超市等，也可以自己新增、刪除，或上傳照片當圖示。</p>
       <h4>📰 新聞</h4>
       <p>即時新聞在這個環境一直讀取失敗，所以這裡改成大家最常用、不用登入的網站捷徑（Google、YouTube、Yahoo奇摩新聞等），點圖示就直接開啟。也可以自己新增、修改或刪除，並上傳照片當圖示。</p>
       <h4>🎙 語音筆記</h4>
