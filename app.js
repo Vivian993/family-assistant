@@ -410,19 +410,54 @@ function clearSubtotal(){subtotal=0;const el=document.getElementById('subtotalAm
 
 /* ============ FESTIVALS (click a card to open detail) ============ */
 function festHTML(){
-  return `${hintBox('fest','點一下節日卡片可以查看和修改供品內容。')}
+  return `${hintBox('fest','點一下節日卡片可以查看和修改供品內容；也可以自己新增節日。')}
   <div class="fest-grid">
     ${festivals.map(f=>`
       <div class="card fest-preview" data-id="${f.id}">
         <div class="fp-emoji">${f.emoji}</div>
         <div class="fp-name">${escapeHtml(f.name)}</div>
       </div>`).join('')}
+    <div class="card fest-preview fest-preview-add" id="festAddCard">
+      <div class="fp-emoji">➕</div>
+      <div class="fp-name">新增節日</div>
+    </div>
   </div>`;
 }
 function bindFestivals(){
-  document.querySelectorAll('.fest-preview').forEach(card=>{
+  document.querySelectorAll('.fest-preview[data-id]').forEach(card=>{
     card.addEventListener('click',()=>openFestivalModal(card.dataset.id));
   });
+  const addCard=document.getElementById('festAddCard');
+  if(addCard)addCard.addEventListener('click',openAddFestivalModal);
+}
+function openAddFestivalModal(){
+  const overlay=document.createElement('div');
+  overlay.className='modal-overlay';
+  overlay.innerHTML=`
+    <div class="modal-box">
+      <h3>新增節日</h3>
+      <input id="newFestEmoji" placeholder="一個 emoji 圖示，例如 🎊">
+      <input id="newFestName" placeholder="節日名稱，例如：媽祖生">
+      <input id="newFestTime" placeholder="拜拜時間（可留空）">
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="newFestCancel">取消</button>
+        <button class="btn btn-primary" id="newFestSave">新增</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close=()=>overlay.remove();
+  overlay.querySelector('#newFestCancel').onclick=close;
+  overlay.addEventListener('click',e=>{if(e.target===overlay)close();});
+  overlay.querySelector('#newFestSave').onclick=()=>{
+    const emoji=overlay.querySelector('#newFestEmoji').value.trim()||'🎊';
+    const name=overlay.querySelector('#newFestName').value.trim();
+    const time=overlay.querySelector('#newFestTime').value.trim();
+    if(!name){alert('請輸入節日名稱');return;}
+    festivals.push({id:crypto.randomUUID(),emoji,name,time,guanyin:[],ancestor:[]});
+    store.set('festivals',festivals);
+    close();
+    renderMain();
+  };
 }
 function festivalDetailInner(f){
   return `
@@ -552,23 +587,22 @@ const QIAN_DATA=[
 let lastFortune=store.get('lastFortune',null);
 function fortuneHTML(){
   const has=!!lastFortune;
-  return `${hintBox('fortune','點一下籤卡就能求一支籤，看看今天的運勢。抽過的結果會留在這裡，家人想玩可以隨時再抽一次。內容僅供參考娛樂，別太當真喔！')}
+  return `${hintBox('fortune','點一下籤筒就能求一支籤，看看今天的運勢。抽過的結果會留在這裡，家人想玩可以隨時再抽一次。內容僅供參考娛樂，別太當真喔！')}
   <div class="card fortune-card">
     <div class="fortune-stage">
-      <div class="f-stars" aria-hidden="true"></div>
-      <div class="f-moon" aria-hidden="true">🌙</div>
       <div class="f-eyebrow">誠　心　則　靈</div>
-      <div class="f-title">今日運籤</div>
-      <div class="f-subtitle">默念心中所問之事，選一張籤卡</div>
+      <div class="f-title">六十甲子籤</div>
+      <div class="f-subtitle">默念心中所問之事，再行抽籤</div>
+      <div class="f-smokewrap" aria-hidden="true"><div class="f-smoke"></div><div class="f-smoke"></div><div class="f-smoke"></div></div>
 
-      <div class="f-deck-wrap ${has?'hidden':''}" id="qiantongWrap">
-        <div class="f-deck" id="qiantong">
-          <div class="f-card-back" style="transform:rotate(-9deg) translateX(-16px);">✦</div>
-          <div class="f-card-back" style="transform:rotate(0deg) translateY(-6px);">✦</div>
-          <div class="f-card-back" style="transform:rotate(9deg) translateX(16px);">✦</div>
+      <div class="f-qiantong-wrap ${has?'hidden':''}" id="qiantongWrap">
+        <div class="f-qiantong" id="qiantong">
+          <div class="f-sticks" id="sticksLayer"></div>
+          <div class="f-tuberim"></div>
+          <div class="f-tubebody"></div>
         </div>
-        <div class="f-hint">輕點卡牌，抽一張籤</div>
-        <button class="f-drawbtn" id="drawBtn">✦　求　籤　✦</button>
+        <div class="f-hint">點擊籤筒，搖出一支籤</div>
+        <button class="f-drawbtn" id="drawBtn">🙏　誠　心　抽　籤</button>
       </div>
 
       <div class="f-flyingstick" id="flyingStick"></div>
@@ -595,11 +629,27 @@ function bindFortuneView(){
   const qiantongWrap=document.getElementById('qiantongWrap');
   const qiantong=document.getElementById('qiantong');
   const drawBtn=document.getElementById('drawBtn');
+  const sticksLayer=document.getElementById('sticksLayer');
   const flyingStick=document.getElementById('flyingStick');
   const resultCard=document.getElementById('resultCard');
   const cardInner=document.getElementById('cardInner');
   const againBtn=document.getElementById('againBtn');
   if(!qiantong)return;
+
+  const STICK_COUNT=12;
+  sticksLayer.innerHTML='';
+  for(let i=0;i<STICK_COUNT;i++){
+    const s=document.createElement('div');
+    s.className='f-stick';
+    const angle=(Math.random()*26-13).toFixed(1);
+    const leftOffset=(Math.random()*60-30).toFixed(1);
+    s.style.left=`calc(50% + ${leftOffset}px)`;
+    s.style.transform=`rotate(${angle}deg)`;
+    const tip=document.createElement('div');
+    tip.className='f-tip';
+    s.appendChild(tip);
+    sticksLayer.appendChild(s);
+  }
 
   let drawing=false;
   function drawQian(){
@@ -888,12 +938,21 @@ function openAddShortcutModal(list,storeKey,rerenderFn){
 const defaultLinks=[
   {id:'google',img:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAGWUlEQVR4nO2dPXIcNxBGmy5lTJz5ANwbOLByliKdwKmOwQModuoql1P5AopcKqc+xDJ02aESxlLgahUIYmYA9D+mX0ouF8vvoRvA7M4CJElyXm6sB6DB9Xr9MvvYy+Wy9P9oqRdHCXqUVcQI/SJ6A7+7u5t+jsfHx67fiypEuEHvhU4JepQ9MSLJEGKgW6FrBn7ElhDeZXA9uFbwnkLfoiWDVxFcDipq8DURRHA1mDr4iKFvUcvgRQQXg1g5+BpvIpgLUIa/cvA1pQiWEpg98VmDr7EW4TvtJwTI8EvK1695komoGmcV/Pe//7z78x//+23zZ58ebrmHs4lFNVATQCv8o7Bb7AnQQlIKbQlUBJAOfyb0klEBSiRk0JRA9I9LBk8NvYQiQAm3DBoiiAkgFT5n8AiXAAinCNISiAggEb5E8Ai3AAiXCJISsAvAHb5k8IiUAAiHCFISsArAGb5G8Ii0AAhVBAkJ2A6Cooavyf37J9LjJQ6NWCziCt8qeK0KUEKpBpyVgPUoOGL4VlCqAeeuiiwAzv4MfxwOCaitgFQ+qOF7Cd6iBdTMtgRsB7OtYLoCUM3zEr4XqAvE2TzILWBm9mf4bWYkoK4HpgSglP4Mfx+KBDNVYFiADF8eTQnU3hGU4Y9BXRP0MiQAx5YvkWOmCnQLkKVfH41WIN4CMnwa0q2gS4DZ2Z/h8zAqwUgVeDU3pJh8fveh6/e0FmAeODw+jDz7ewM/wosQo8fFPcfEIhXAOnyu4BH8x1uLcP/+if2Np7trgGjbvs/vPrCHX/Lp4Vb1gyJUetYC7BXAYvZLht7CsiJwV4HNCmDxObUZtMMviVQNtvLcXBzMlH/N2W8ZfAvtajAi395i0OTTwVS8hQ8QqxqUNAXwPPs9ho9oSjBScfYWg6EqgOfwkWiVgEUAjdkfIXxESwKOdccLAaLt/ZM+ttpAiBYQafYjUVoBWQDp8h8xfERDAmobCFEBEjmeCeCt/0ee/YinVtBaB5AqgPVVv+R/KG3AbQtYYfYjnqpAjVsBEh1cCrDS7Ee8VgGXAiR6fBNgdAeQC0Bf9C4E651AVoCT406AFfs/4nEd4E6ARJcU4OSkACcnBTg5p/psoAd+/ete7o8//D38kGkB/vnhj9mHHrDuLsAj2QJOTgpwclKAk+NOgKeP5l9mKsb1zWvrIbzAnQCJLinAyfkmAH5ytPWd9y1u34b49PhpuPzZdwZQf1LYZQVYcR3gsf8DOBUg0cOtACtVAa+zH8CxAIkOJAGkF4IrVAGN2d+7AGzxTIDRnUASi9a9gty3gMhVwHPvR8gCaJwHRJRAK3xK+QcIUAESWV4I4HUdEKkKeCz9W/cKZKkAWsfCESTQDJ9a/gECtgDPEnic+Uc0BZhpA5oXhzxKoB3+yOzfu1Vs2HcFowTWVyUjzvqSwxbgtQogltXAKvyZ2b/FZgW4XC43UW4Zr10NIs76ra+NYW8Bt2+/mM1KaRE8BM+x8i/ZbQFezwSOePp4wyrh9c1rF+GPYvalUZZVoKQeQ29l8Bo29+wH6PjaOID5G0h6kKCHf3/5yXoIh4yG3zP7AQIeBCW8dAkwuxaw3qOvgtTsB1CoACkBDYm+X9ItAGVHkBLMMRP+yOwHGKwAUbeFZ2E0fADFRWBWgTGkSz8yLEC2Ank0Sj8yVQFSAjk0wwdgaAEpAR+U8GeZFmDGtpKU4DnUnj+bB/msluN7hqyPjC2PginBU0o/Qm4BHFvDs1YD6/ABmLeBKUE/HOFzwFZ7y3cPUb92TrslaLYAaq8vw6fOfgDGClAOhmroqtXAW/gAjBUA4awEADrVQLoCcJzqSYQPICAAAL8EALIiSAnAdZwrFT6AkAAAMhIAyIjALQDnOb5k+ACCAgDISQDAKwKXANwXcKTDBxAWAJEUAYAuA0UAiat2GsEjavstaQmQGRlGBZC8VKsZPoCiAAB6EtQcSbEngNZ1eQD98AGUBUCsRPCKRfCIydvCOQ+NomMZPoBRBSg5azWwDh4xFwDguQQAa4tQVzzL8AGcCICsLIK34BEXg6hp3Zcgogyt9Y2X4BFXg6mJKkKE4BGXg6rZulOJJxm2djNeg0dcD67F3m1rNIXY2756D70kzEBb9N7DiCJG7zlFpNBLQg56C82bWkUNvGaJF3EERYxVgk6SJl8BqKJPn6p0kREAAAAASUVORK5CYII=',name:'Google 搜尋',url:'https://www.google.com/'},
   {id:'youtube',img:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAACgUlEQVR4nO3d3VEcMRCFUdnlPOwYIP8QIAY7EvuBku0CZkaj1fyo+5wAYGvvtz3LE6UAAAAAAAAAAAAAEXw585f9fHr6febvm9mP19dTtjn8lxj9cUfGcMgPNvpxRscw9IcZ/jyjQvg64oeUYvyzjXq/hwRg/GuMeN8fOiOGv4/eR0L3BTD+vfTu0RWA8e+pZ5fdARj/3vbuM+yvAOa0KwCf/jns2ak5AOPPpXWvpgCMP6eW3XwHSG4zAJ/+uW3t5wIkJ4DkVgNw/mNY29EFSE4AyS0G4PzHsrSnC5BcyAC+v7xc/RKmETKAUt4iEMK2sAFUIlgXPoBSXIM1KQKoRPBRqgBKcQ3eSxdAJYQ3aQOoskeQPoBScl8DAfwnYwgC+ESmCASwIMs1EMCG6BEIoEHkayCAHSKGIIAOkSIQQKco10AAD5o9BAEMMmsEAhhoxmsggAPMFIEADjLLNfh29QuI6tfz89UvoYkLcIBZxi/FBRhqpuErAQww4/CVAB4w8/CV7wCdIoxfiguwW5ThKwE0ijZ85RHQIOr4pbgAqyIPXwngExmGrzwC3sk0fikuwF/Zhq/SB5B1+CptANmHr1J+BzD+P6kugOE/ShGA4ZeFfwQYf13YC2D4NiEvgPHbhQyAdgJIbjGA3v9GzT0t7ekCJCeA5FYD8BiIYW1HFyA5ASS3GYDHwNy29nMBkmsKwBWYU8tuzRdABHNp3WvXI0AEc9izk+8Aye0OwBW4t737dF0AEdxTzy7djwAR3EvvHkNG9J/Gr/PoB3HIl0DX4Boj3vdhfwWI4Fyj3u9DRvNIOM7oD9rhn1oxPO7I63rq2RZDO49UAAAAAAAAAAAAdvoDmHHT5FU7oIAAAAAASUVORK5CYII=',name:'YouTube',url:'https://www.youtube.com/'},
-  {id:'line',img:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAADJklEQVR4nO2c3VHjQBAGlysKUjoCgSAhEC6l4wUeKBdyYUn7OzO7X3cAtne6NZL94JQAAAAAAECLO883f3h//vR8/0h8PL25uDB9U4TnYxWEyZsgvp7RIQx7caT3Z0QMf3q/YErIH8WIuXYtCvF29NoG3TYA8m3pNe8uASDfhx5zbw4A+b60zr8pAOTHoMVDdQDIj0Wtj6oAkB+TGi/FASA/NqV+igJA/hyUeBrySyDMQ3YAXP1zkesrKwDkz0mON24B4hCAOKcBsP7n5swfG0CcwwC4+tfgyCMbQBwCEIcAxNkNgPv/Wuz5vLf+IKX8//vq/RGaefz34v0RdgkZwArSt2zPEy2GUAGsJv4WlzNGCSHMQ6CC/C1RzhsigCjDsCbCud0DiDAET7zP7xqA9+Gj4DkHtwCQf43XPFwCQP5tPOZiHgDyj7Gej/tDIPhiGgBXfx6Wc2IDiEMA4pgFwPovw2pebABxCEAcAhCHAMQhAHEIQBwCEIcAxCEAcQhAHAIQhwDEIQBxCEAcAhCHAMQhAHEIQBwCEIcAxCEAcQhAHLMAovwlyixYzYsNIA4BiGMaALeBPCznxAYQxzwAtsAx1vNx2QBEcBuPubjdAojgGq95uD4DEME3nnNwfwhUj8D7/O4BpOQ/BC8inDtEACnFGIYlUc4b6u/iL0NZ+e9kooi/ECqAC9shrRBDNOlbQgawZW94vcKILMeCMM8AHqjLT0k4AOR/E/4W0BvEXyO1AZD/G5kAkH8biQCQv8/yASD/mKUDQP45ywaA/DyWDAD5+Sz1OwDiy1lmAyC/jiUCQH490weA/DZ2A/h4eruz/CA1ID+fPZ/TbgDk92HaAKAPBCDOYQAzPAfAOUce2QDinAbAFpibM39sAHEIQJysALgNzEmOt+wNQARzkeuLW4A4RQGwBeagxFPxBiCC2JT6qboFEEFMarxUPwMQQSxqfTQ9BBJBDFo8NH8LIAJfWuff5WsgEfjQY+7dfgcgAlt6zXuItIf3588Rrwv9L7QhvwSyDcYwYq4motgI9Yy+mEyvVELIx2qLuq5qgviB2yYAAAAAmPEFLVD2ZzDCEkAAAAAASUVORK5CYII=',name:'LINE 首頁',url:'https://line.me/zh-hant/'},
+  {id:'yahoo-news',img:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAADJklEQVR4nO2c3VHjQBAGlysKUjoCgSAhEC6l4wUeKBdyYUn7OzO7X3cAtne6NZL94JQAAAAAAECLO883f3h//vR8/0h8PL25uDB9U4TnYxWEyZsgvp7RIQx7caT3Z0QMf3q/YErIH8WIuXYtCvF29NoG3TYA8m3pNe8uASDfhx5zbw4A+b60zr8pAOTHoMVDdQDIj0Wtj6oAkB+TGi/FASA/NqV+igJA/hyUeBrySyDMQ3YAXP1zkesrKwDkz0mON24B4hCAOKcBsP7n5swfG0CcwwC4+tfgyCMbQBwCEIcAxNkNgPv/Wuz5vLf+IKX8//vq/RGaefz34v0RdgkZwArSt2zPEy2GUAGsJv4WlzNGCSHMQ6CC/C1RzhsigCjDsCbCud0DiDAET7zP7xqA9+Gj4DkHtwCQf43XPFwCQP5tPOZiHgDyj7Gej/tDIPhiGgBXfx6Wc2IDiEMA4pgFwPovw2pebABxCEAcAhCHAMQhAHEIQBwCEIcAxCEAcQhAHAIQhwDEIQBxCEAcAhCHAMQhAHEIQBwCEIcAxCEAcQhAHLMAovwlyixYzYsNIA4BiGMaALeBPCznxAYQxzwAtsAx1vNx2QBEcBuPubjdAojgGq95uD4DEME3nnNwfwhUj8D7/O4BpOQ/BC8inDtEACnFGIYlUc4b6u/iL0NZ+e9kooi/ECqAC9shrRBDNOlbQgawZW94vcKILMeCMM8AHqjLT0k4AOR/E/4W0BvEXyO1AZD/G5kAkH8biQCQv8/yASD/mKUDQP45ywaA/DyWDAD5+Sz1OwDiy1lmAyC/jiUCQH490weA/DZ2A/h4eruz/CA1ID+fPZ/TbgDk92HaAKAPBCDOYQAzPAfAOUce2QDinAbAFpibM39sAHEIQJysALgNzEmOt+wNQARzkeuLW4A4RQGwBeagxFPxBiCC2JT6qboFEEFMarxUPwMQQSxqfTQ9BBJBDFo8NH8LIAJfWuff5WsgEfjQY+7dfgcgAlt6zXuItIf3588Rrwv9L7QhvwSyDcYwYq4motgI9Yy+mEyvVELIx2qLuq5qgviB2yYAAAAAmPEFLVD2ZzDCEkAAAAAASUVORK5CYII=',name:'Yahoo奇摩新聞',url:'https://tw.news.yahoo.com/'},
   {id:'yahoo',img:'data:image/png;base64,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',name:'Yahoo奇摩',url:'https://tw.yahoo.com/'},
   {id:'weather-gov',ic:'🌦️',name:'中央氣象署',url:'https://www.cwa.gov.tw/'},
   {id:'transport',ic:'🚌',name:'公路客運動態',url:'https://www.taiwanbus.tw/ebuspage/Default.aspx?lan=C'}
 ];
 let quickLinks=store.get('quickLinks',defaultLinks);
+(function migrateLineLink(){
+  let changed=false;
+  quickLinks.forEach(l=>{
+    if(l.id==='line'&&l.url==='https://line.me/zh-hant/'){
+      l.id='yahoo-news';l.name='Yahoo奇摩新聞';l.url='https://tw.news.yahoo.com/';changed=true;
+    }
+  });
+  if(changed)store.set('quickLinks',quickLinks);
+})();
 /* fix a previously-wrong default link for people who already saved an older version */
 (function migrateQuickLinks(){
   let changed=false;
@@ -1243,7 +1302,7 @@ function openHelp(){
       <h4>🗺 地圖</h4>
       <p>輸入想去的地方按「開始導航」，會用 Google 地圖規劃路線，Android、iPhone 都能使用。下方「最常用的查詢」可以一鍵找附近醫院、藥局、超市等，也可以自己新增、刪除，或上傳照片當圖示。</p>
       <h4>📰 新聞</h4>
-      <p>即時新聞在這個環境一直讀取失敗，所以這裡改成大家最常用、不用登入的網站捷徑（Google、YouTube、LINE、Yahoo奇摩等），點圖示就直接開啟。也可以自己新增、修改或刪除，並上傳照片當圖示。</p>
+      <p>即時新聞在這個環境一直讀取失敗，所以這裡改成大家最常用、不用登入的網站捷徑（Google、YouTube、Yahoo奇摩新聞等），點圖示就直接開啟。也可以自己新增、修改或刪除，並上傳照片當圖示。</p>
       <h4>🎙 語音筆記</h4>
       <p>按住麥克風按鈕開始說話，最長可以錄 60 秒，時間到會自動停止，內容會存到「筆記記錄」，<b>不會</b>自動加入待辦事項——想加入的話要自己按「➕待辦」。可以點文字直接修改，也可以按🗑刪除。⚠️ iPhone 的 Safari 瀏覽器不支援這個功能，請改用 Android 手機或電腦的 Chrome 瀏覽器。</p>
       <h4>⚙️ 設定</h4>
